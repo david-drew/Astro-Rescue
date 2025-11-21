@@ -51,7 +51,6 @@ func _ready() -> void:
 	_connect_eventbus()
 	_enter_launch_menu()
 
-
 # -------------------------------------------------------------------
 # EventBus wiring
 # -------------------------------------------------------------------
@@ -150,7 +149,6 @@ func start_new_career() -> void:
 	GameState.reset_profile()
 	$Systems/MissionController.begin_mission()
 	_enter_mode1()
-
 
 func return_to_hq_after_mission() -> void:
 	##

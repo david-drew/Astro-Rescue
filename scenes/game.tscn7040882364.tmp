@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3 uid="uid://dhwbgfm0d7vpi"]
+[gd_scene load_steps=18 format=3 uid="uid://dhwbgfm0d7vpi"]
 
 [ext_resource type="Script" uid="uid://cqj2hsg7f8ycf" path="res://scripts/game.gd" id="1_yqjtg"]
 [ext_resource type="Script" uid="uid://c5k1dh5ok7a3d" path="res://scripts/systems/mission_controller.gd" id="2_iywne"]
@@ -15,8 +15,6 @@
 [ext_resource type="Script" uid="uid://dpu5dqcqk4dls" path="res://scripts/systems/terrain_tiles_controller.gd" id="9_trtic"]
 [ext_resource type="PackedScene" uid="uid://ceum4ki43unsg" path="res://scenes/ui/launch_menu.tscn" id="10_dinhu"]
 [ext_resource type="PackedScene" uid="uid://b3v5xi2iht5kv" path="res://scenes/ui/hq.tscn" id="12_trtic"]
-[ext_resource type="Script" uid="uid://dac1odxjscqoj" path="res://scripts/ui/orbital_camera.gd" id="13_ca42v"]
-[ext_resource type="Script" uid="uid://b6qwot2ywuy7p" path="res://scripts/orbital_view.gd" id="13_rysoc"]
 
 [sub_resource type="Gradient" id="Gradient_kvuet"]
 
@@ -38,7 +36,6 @@ terrain_generator_path = NodePath("../TerrainGenerator")
 terrain_tiles_controller_path = NodePath("../TerrainTilesController")
 lander_path = NodePath("../../World/Lander")
 hud_path = NodePath("../../UI/LanderHUD")
-orbital_view_path = NodePath("../../OrbitalView")
 mission_file_id = "training_mission_01.json"
 
 [node name="MissionGenerator" type="Node" parent="Systems"]
@@ -46,6 +43,10 @@ script = ExtResource("3_p57ef")
 
 [node name="TimeManager" type="Node" parent="Systems"]
 script = ExtResource("4_vtaks")
+
+[node name="GravityFieldManager" type="Node" parent="Systems"]
+script = ExtResource("5_ir15t")
+debug_logging = true
 
 [node name="EnvironmentController" type="Node" parent="Systems"]
 script = ExtResource("2_lnu2h")
@@ -68,10 +69,6 @@ script = ExtResource("8_kvuet")
 
 [node name="TerrainTilesController" type="Node" parent="Systems"]
 script = ExtResource("9_trtic")
-
-[node name="GravityFieldManager" type="Node2D" parent="Systems"]
-script = ExtResource("5_ir15t")
-debug_logging = true
 
 [node name="World" type="Node2D" parent="."]
 
@@ -126,13 +123,34 @@ z_index = 2
 
 [node name="Lander" parent="World" instance=ExtResource("9_kvuet")]
 visible = false
+base_thrust_force = null
+turbo_thrust_multiplier = null
+allow_turbo = null
+fuel_capacity = null
+base_fuel_burn_rate = null
+turbo_fuel_multiplier = null
+rotation_accel = null
+max_angular_speed = null
+rotation_drag = null
+safe_vertical_speed = null
+safe_horizontal_speed = null
+safe_tilt_deg = null
+safe_upright_check_duration = null
+destroy_vertical_speed = null
+destroy_horizontal_speed = null
+destroy_velocity_magnitude = null
+hard_crash_always_fatal = null
+upright_angle_limit_for_check = null
 debug_logging = true
-
-[node name="OrbitalView" type="Node2D" parent="."]
-script = ExtResource("13_rysoc")
-
-[node name="OrbitalCamera" type="Camera2D" parent="OrbitalView"]
-script = ExtResource("13_ca42v")
+weather_controller_path = null
+wind_force_scale = null
+altitude_reference_y = null
+pixels_per_meter = null
+use_altitude_gravity = null
+gravity_field_manager_path = null
+hud_update_enabled = null
+hud_update_interval_frames = null
+altitude_change_threshold = null
 
 [node name="UI" type="CanvasLayer" parent="."]
 

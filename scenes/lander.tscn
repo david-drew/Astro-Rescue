@@ -1,12 +1,82 @@
-[gd_scene load_steps=6 format=3 uid="uid://ct8c084jmt55y"]
+[gd_scene load_steps=16 format=3 uid="uid://ct8c084jmt55y"]
 
 [ext_resource type="Script" uid="uid://cvw2w84pct25t" path="res://scripts/lander_controller.gd" id="1_3ri1r"]
 [ext_resource type="Texture2D" uid="uid://dbhrs54xr3i0r" path="res://assets/images/Spaceships.png" id="2_fo1sg"]
 [ext_resource type="Texture2D" uid="uid://7db7i845ki7o" path="res://assets/images/fx/Thruster_01.png" id="3_p73th"]
 [ext_resource type="Script" uid="uid://6usp3u5g1fyx" path="res://scripts/ui/camera_2d.gd" id="4_fo1sg"]
+[ext_resource type="Texture2D" uid="uid://d1hcdrti6ual7" path="res://assets/images/fx/Explosion.png" id="5_p73th"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_0tnpc"]
 size = Vector2(29, 27)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_p73th"]
+atlas = ExtResource("5_p73th")
+region = Rect2(0, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_1vxyh"]
+atlas = ExtResource("5_p73th")
+region = Rect2(32, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_17yvr"]
+atlas = ExtResource("5_p73th")
+region = Rect2(64, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_o7ytm"]
+atlas = ExtResource("5_p73th")
+region = Rect2(96, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6nx8d"]
+atlas = ExtResource("5_p73th")
+region = Rect2(128, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_q5yk6"]
+atlas = ExtResource("5_p73th")
+region = Rect2(160, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ugijm"]
+atlas = ExtResource("5_p73th")
+region = Rect2(192, 0, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_o5whq"]
+atlas = ExtResource("5_p73th")
+region = Rect2(224, 0, 32, 32)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_42vqx"]
+animations = [{
+"frames": [],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_p73th")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_1vxyh")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_17yvr")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_o7ytm")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6nx8d")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_q5yk6")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ugijm")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_o5whq")
+}],
+"loop": false,
+"name": &"explode",
+"speed": 5.0
+}]
 
 [node name="Lander" type="RigidBody2D"]
 script = ExtResource("1_3ri1r")
@@ -28,3 +98,11 @@ shape = SubResource("RectangleShape2D_0tnpc")
 
 [node name="Camera2D" type="Camera2D" parent="."]
 script = ExtResource("4_fo1sg")
+
+[node name="DeathSprite" type="AnimatedSprite2D" parent="."]
+visible = false
+sprite_frames = SubResource("SpriteFrames_42vqx")
+animation = &"explode"
+autoplay = "explode"
+
+[connection signal="body_entered" from="." to="." method="_on_body_entered"]

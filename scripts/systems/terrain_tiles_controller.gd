@@ -319,3 +319,27 @@ func _set_tile(layer: TileMapLayer, cell: Vector2i, source_id: int, atlas_coords
 	if source_id < 0:
 		return
 	layer.set_cell(cell, source_id, atlas_coords, alternative_tile)
+
+func set_tiles_visible(is_visible: bool) -> void:
+	##
+	# Show or hide all tile layers
+	##
+	_resolve_references()  # Make sure we have layer references
+	
+	if _bg_layer != null:
+		_bg_layer.visible = is_visible
+	
+	if _surface_layer != null:
+		_surface_layer.visible = is_visible
+	
+	if _landing_layer != null:
+		_landing_layer.visible = is_visible
+	
+	if debug_logging:
+		print("[TerrainTilesController] All tiles visibility set to: ", is_visible)
+
+func hide_tiles() -> void:
+	set_tiles_visible(false)
+
+func show_tiles() -> void:
+	set_tiles_visible(true)

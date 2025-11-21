@@ -21,7 +21,6 @@ EventBus="*res://scripts/autoloads/event_bus.gd"
 DataManager="*res://scripts/autoloads/data_manager.gd"
 GameState="*res://scripts/autoloads/game_state.gd"
 SaveSystem="*res://scripts/autoloads/save_system.gd"
-GravityFieldManager="*res://scripts/autoloads/gravity_field_manager.gd"
 
 [display]
 

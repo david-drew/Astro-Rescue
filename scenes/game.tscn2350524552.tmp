@@ -68,6 +68,23 @@ script = ExtResource("8_kvuet")
 
 [node name="TerrainTilesController" type="Node" parent="Systems"]
 script = ExtResource("9_trtic")
+terrain_generator_path = null
+bg_tiles_layer_path = null
+surface_tiles_layer_path = null
+landing_deco_layer_path = null
+bg_source_id = null
+bg_atlas_coords = null
+surface_source_id = null
+surface_atlas_coords = null
+landing_pad_source_id = null
+landing_pad_atlas_coords = null
+landing_light_source_id = null
+landing_light_atlas_coords = null
+background_height_above_terrain = null
+background_height_below_terrain = null
+surface_detail_density = null
+landing_light_spacing = null
+debug_logging = null
 
 [node name="GravityFieldManager" type="Node2D" parent="Systems"]
 script = ExtResource("5_ir15t")
