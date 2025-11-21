@@ -29,12 +29,14 @@ extends Node
 
 @export_category("Scene References")
 @export var terrain_generator_path: NodePath
+@export var terrain_tiles_controller_path: NodePath 
 @export var lander_path: NodePath
 @export var hud_path: NodePath
 
 @export_category("Mission Data")
 @export var mission_data_dir: String = "res://data/missions"
 @export var mission_file_id: String = ""  # e.g. "training_mission_01" or "mission_01"
+
 
 # -------------------------------------------------------------------
 # Internal state
@@ -68,6 +70,7 @@ var _orbit_reached_altitude: float = 0.0
 var _orbit_reached_time: float = 0.0
 
 var _terrain_generator: TerrainGenerator = null
+var _terrain_tiles_controller: TerrainTilesController = null
 var _lander: Node = null
 var _hud: Node = null
 
@@ -276,8 +279,22 @@ func _apply_mission_terrain() -> void:
 
 	_terrain_generator.generate_terrain(terrain_config)
 
-## FIXED _position_lander_from_spawn() function
-## Replace the function in mission_controller.gd with this
+func _get_terrain_tiles_controller() -> TerrainTilesController:
+	if _terrain_tiles_controller == null:
+		if terrain_tiles_controller_path != NodePath(""):
+			_terrain_tiles_controller = get_node_or_null(terrain_tiles_controller_path) as TerrainTilesController
+	return _terrain_tiles_controller
+
+func _apply_mission_tiles() -> void:
+	var tiles_controller := _get_terrain_tiles_controller()
+	if tiles_controller == null:
+		return
+
+	if _mission_config.is_empty():
+		return
+
+	tiles_controller.build_tiles_from_mission(_mission_config)
+
 
 func _position_lander_from_spawn() -> void:
 	if _lander == null:
@@ -446,10 +463,6 @@ func _reset_mission_timer() -> void:
 # -------------------------------------------------------------------
 
 func _connect_eventbus_signals() -> void:
-	if not Engine.has_singleton("EventBus"):
-		push_warning("MissionController: EventBus singleton not found; no mission events will be received.")
-		return
-
 	var eb := EventBus
 
 	if not eb.is_connected("touchdown", Callable(self, "_on_touchdown")):
@@ -465,9 +478,11 @@ func _connect_eventbus_signals() -> void:
 		eb.connect("player_died", Callable(self, "_on_player_died"))
 
 	# You can connect to TimeManager's tick if desired.
-	var tm = TimeManager.new()
-	if not tm.is_connected("time_tick", Callable(self, "_on_time_tick")):
-		tm.connect("time_tick", Callable(self, "_on_time_tick"))
+	#var tm = TimeManager.new()
+	if not eb.is_connected("time_tick", Callable(self, "_on_time_tick")):
+		eb.connect("time_tick", Callable(self, "_on_time_tick"))
+			
+	EventBus.connect("lander_entered_landing_zone", Callable(self, "_on_landing"))		# Might want to remove this or "touchdown"
 
 
 func _on_time_tick(channel_id: String, dt_game: float, _dt_real: float) -> void:
@@ -552,8 +567,12 @@ func abort_mission(reason: String = "aborted") -> void:
 # -------------------------------------------------------------------
 # Event handlers
 # -------------------------------------------------------------------
+func _on_landing(zone_info: Dictionary) -> void:
+	print("TOUCHDOWN (landing)!!")
+	_on_touchdown(zone_info)
 
 func _on_touchdown(touchdown_data: Dictionary) -> void:
+	print("TOUCHDOWN!!")
 	if _mission_state != "running":
 		return
 
@@ -580,8 +599,8 @@ func _on_touchdown(touchdown_data: Dictionary) -> void:
 	# After touchdown: check if objectives are satisfied, and auto-end if configured.
 	_check_for_mission_completion()
 
-
-func _on_lander_destroyed() -> void:
+# TODO: Use cause & context
+func _on_lander_destroyed(cause:String, context:Dictionary) -> void:
 	if _mission_state != "running":
 		return
 
@@ -843,11 +862,11 @@ func _build_mission_result(success_state: String, reason: String) -> Dictionary:
 
 func _apply_mission_setup() -> void:
 	_apply_mission_terrain()
+	_apply_mission_tiles() 
 	_position_lander_from_spawn()
 	_apply_lander_loadout()
 	_apply_hud_instruments()
 	_update_hud_timer()
-
 
 func _apply_lander_loadout() -> void:
 	if _lander == null and lander_path != NodePath(""):

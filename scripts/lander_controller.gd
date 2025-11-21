@@ -18,8 +18,8 @@ class_name LanderController
 # -------------------------------------------------------------------
 
 @export_category("Thrust")
-@export var base_thrust_force: float = 450.0  			# Reduced from 450 for better feel
-@export var turbo_thrust_multiplier: float = 1.8
+@export var base_thrust_force: float = 700.0  			# Reduced from 600 for better feel
+@export var turbo_thrust_multiplier: float = 6.0
 @export var allow_turbo: bool = true
 
 @export_category("Fuel")
@@ -28,9 +28,9 @@ class_name LanderController
 @export var turbo_fuel_multiplier: float = 2.5
 
 @export_category("Rotation")
-@export var rotation_accel: float = 4.0         # Slightly reduced for smoother control
-@export var max_angular_speed: float = 3.5      # Slightly reduced
-@export var rotation_drag: float = 4.0          # Increased for snappier feel
+@export var rotation_accel: float = 6.0         # Slightly reduced for smoother control
+@export var max_angular_speed: float = 4.5      # Slightly reduced
+@export var rotation_drag: float = 6.0          # Increased for snappier feel
 
 # -------------------------------------------------------------------
 # Landing / impact thresholds
@@ -43,9 +43,9 @@ class_name LanderController
 @export var safe_upright_check_duration: float = 1.5
 
 @export_category("Destruction Thresholds")
-@export var destroy_vertical_speed: float = 9.0
-@export var destroy_horizontal_speed: float = 7.0
-@export var destroy_velocity_magnitude: float = 11.0
+@export var destroy_vertical_speed: float = 15.0
+@export var destroy_horizontal_speed: float = 15.0
+@export var destroy_velocity_magnitude: float = 15.0
 @export var hard_crash_always_fatal: bool = true
 
 @export_category("Landing Zone / Debug")
@@ -90,7 +90,7 @@ var _weather_controller: WeatherController = null
 var _current_wind: Vector2 = Vector2.ZERO
 var _current_gravity_vector: Vector2 = Vector2.ZERO
 
-var _gravity_field_manager: GravityFieldManager = null
+var _gravity_field_manager:GravityFieldManager
 
 var _hud_frame_counter: int = 0
 var _last_emitted_altitude: float = 0.0
@@ -105,14 +105,20 @@ func _ready() -> void:
 	if fuel_capacity <= 0.0:
 		_current_fuel = 0.0
 	_last_fuel_ratio = _get_fuel_ratio()
+	_gravity_field_manager = GravityFieldManager.new()
 
 	# Disable built-in gravity; we will apply custom gravity manually.
 	gravity_scale = 0.0
-
+	
 	# Initial gravity fallback: use current project default as downward acceleration.
 	# Changed to 30.0 for lunar-style feel (was 49.0)
 	var default_gravity: float = float(ProjectSettings.get_setting("physics/2d/default_gravity", 30.0))
 	_current_gravity_vector = Vector2.DOWN * default_gravity
+	
+	# ADD THESE LINES at the end of _ready():
+	collision_layer = 2   # Layer 2 for lander
+	collision_mask = 1    # Detect layer 1 (terrain)
+	add_to_group("lander")
 
 	# Weather controller reference (for wind)
 	if weather_controller_path != NodePath(""):
@@ -131,9 +137,19 @@ func _ready() -> void:
 	$Sprite2D.rotation_degrees = -90  # change from default right to facing up
 
 	if debug_logging:
-		print("[LanderController] Ready. Fuel capacity=", fuel_capacity,
-			" default_gravity=", default_gravity)
+		print("[LanderController] Ready. Fuel capacity=", fuel_capacity, " default_gravity=", default_gravity)
 
+	call_deferred("_setup_collision")
+
+func _setup_collision() -> void:
+	print("⚠️ Setting up lander collision...")
+	collision_layer = 2
+	collision_mask = 1
+	add_to_group("lander")
+	
+	print("✅ Lander collision_layer: ", collision_layer)
+	print("✅ Lander collision_mask: ", collision_mask)
+	print("✅ In lander group: ", is_in_group("lander"))
 
 func _physics_process(delta: float) -> void:
 	# Get Weather Effects
@@ -142,9 +158,11 @@ func _physics_process(delta: float) -> void:
 	else:
 		_current_wind = Vector2.ZERO
 
-	# NEW: Update gravity based on altitude if enabled
+	# Update gravity based on altitude if enabled
 	if use_altitude_gravity and _gravity_field_manager != null:
 		_current_gravity_vector = _gravity_field_manager.get_gravity_at_position(global_position)
+
+	#_current_gravity_vector = Vector2(0, 30)  # DEBUG ONLY
 
 	_apply_controls(delta)
 	
@@ -240,8 +258,84 @@ func _update_fuel_ratio() -> void:
 # -------------------------------------------------------------------
 # Collision / landing detection
 # -------------------------------------------------------------------
+func get_landing_state(body:Node) -> Dictionary:
+	_landing_evaluation_active = true
+	_impact_ground_body = body
+
+	# Record velocity at impact
+	var vel: Vector2 = linear_velocity
+	var v_speed: float = abs(vel.y)
+	var h_speed: float = abs(vel.x)
+	var speed_mag: float = vel.length()
+
+	# Tilt at impact
+	var tilt_deg: float = abs(rad_to_deg(rotation))
+	tilt_deg = fmod(tilt_deg, 360.0)
+	if tilt_deg > 180.0:
+		tilt_deg = 360.0 - tilt_deg
+
+	# Check if we hit a designated landing zone
+	var in_landing_zone: bool = false
+	var landing_zone_id: String = ""
+	var distance_to_center: float = 0.0
+
+	if body and body.has_method("is_in_group"):
+		if body.is_in_group("landing_zone"):
+			in_landing_zone = true
+			if body.has_method("get"):
+				if body.get("landing_zone_id") != null:
+					landing_zone_id = str(body.get("landing_zone_id"))
+				else:
+					landing_zone_id = body.name
+			else:
+				landing_zone_id = body.name
+
+			# Approximate center distance by using the body's global position.
+			var lander_pos: Vector2 = global_position
+			var lz_center: Vector2 = body.global_position
+			distance_to_center = (lander_pos - lz_center).length()
+		else:
+			landing_zone_id = ""
+	else:
+		landing_zone_id = ""
+
+	_impact_data_pending = {
+		"vertical_speed": v_speed,
+		"horizontal_speed": h_speed,
+		"impact_force": speed_mag,
+		"tilt_deg": tilt_deg,
+		"in_landing_zone": in_landing_zone,
+		"landing_zone_id": landing_zone_id,
+		"distance_to_lz_center": distance_to_center,
+		"upright_duration": 0.0,
+		"hull_damage_ratio": 0.0
+	}
+
+	# Decide if this is immediately catastrophic.
+	if _is_severe_impact(v_speed, h_speed, speed_mag):
+		# Treat as hard crash.
+		_impact_data_pending["hull_damage_ratio"] = 1.0
+		#_send_touchdown(false, _impact_data_pending)
+		_handle_destruction("hard_impact", _impact_data_pending)
+	else:
+		# Soft or moderate landing attempt: start evaluating upright time.
+		_landing_contact_time = 0.0
+		_start_upright_check()
+
+	# NEW: If this is a hard crash, push lander out of terrain
+	if _is_severe_impact(v_speed, h_speed, speed_mag):
+		# Before handling destruction, ensure we're not penetrating
+		_push_out_of_terrain(body)
+		
+		# Then handle destruction
+		_impact_data_pending["hull_damage_ratio"] = 1.0
+		_handle_destruction("hard_impact", _impact_data_pending)
+
+	return _impact_data_pending
+
 
 func _on_body_entered(body: Node) -> void:
+	print("LANDER: BODY ENTERED................................................")
 	##
 	# Hook this to the RigidBody2D "body_entered" signal.
 	# This is treated as a potential landing impact.
@@ -421,10 +515,12 @@ func _handle_destruction(cause: String, context: Dictionary) -> void:
 		print("[LanderController] Destruction: cause=", cause, " context=", context)
 
 	# Broadcast destruction event
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("lander_destroyed", cause, context)
-		if hard_crash_always_fatal:
-			EventBus.emit_signal("player_died", "lander_crash_" + cause, context)
+	EventBus.emit_signal("lander_destroyed", cause, context)
+	if hard_crash_always_fatal:
+		EventBus.emit_signal("player_died", "lander_crash_" + cause, context)
+
+	$Sprite2D.visible = false
+	$DeathSprite.visible = true
 
 	# CRITICAL FIX: Proper crash handling to prevent wild spinning
 	_execute_crash_sequence()
@@ -653,17 +749,7 @@ func _emit_hud_updates() -> void:
 	# Get current stats
 	var altitude: float = get_altitude_estimate_meters()
 	var fuel: float = get_fuel_ratio()
-	
-	# NEW: Update gravity based on altitude if enabled
-	if use_altitude_gravity and _gravity_field_manager != null:
-		_current_gravity_vector = _gravity_field_manager.get_gravity_at_position(global_position)
-		
-		# NEW: Emit gravity signal when it changes
-		if _current_gravity_vector != old_gravity:
-			EventBus.emit_signal("gravity_changed", _current_gravity_vector)
-	
-		old_gravity = _current_gravity_vector
-	
+
 	# Option 1: Emit individual signals (allows throttling per-stat)
 	_emit_altitude_if_changed(altitude)
 	_emit_fuel_if_changed(fuel)

@@ -85,7 +85,6 @@ signal mission_result_applied(mission_id: String, success_state: String, result:
 ## GameState.apply_mission_result(current_mission_result) before emitting this.
 signal debrief_finished(mission_id: String, result: Dictionary)
 
-
 signal time_tick(channel_id: String, dt_game: float, dt_real: float)
 
 # signal world_state_changed(world_state: Dictionary)			# If we want real-time HUD
@@ -93,6 +92,8 @@ signal time_tick(channel_id: String, dt_game: float, dt_real: float)
 # -------------------------------------------------------------------
 # In-mission events (lander, player, environment)
 # -------------------------------------------------------------------
+signal lander_entered_landing_zone(zone_id: String, zone_info: Dictionary)
+signal lander_exited_landing_zone(zone_id: String, zone_info: Dictionary)
 
 ## Emitted on touchdown attempt; success indicates a safe landing according to current thresholds.
 signal touchdown(success: bool, impact_data: Dictionary)

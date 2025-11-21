@@ -48,6 +48,7 @@ var _highest_point_y: float = 0.0
 var _terrain_body: StaticBody2D = null
 
 func _ready() -> void:
+	add_to_group("terrain_generator")
 	if terrain_root_path != NodePath(""):
 		_terrain_root = get_node_or_null(terrain_root_path) as Node2D
 
@@ -146,6 +147,15 @@ func _generate_internal(terrain_config: Dictionary) -> void:
 
 	# Create the terrain nodes
 	_create_terrain_nodes(polygon_points)
+
+	# TERRAIN-COLLIDE-TRY After terrain is generated and surface_y values computed
+	for zone_def in terrain_config.get("landing_zones", []):
+		if typeof(zone_def) == TYPE_DICTIONARY:
+			var id := str(zone_def.get("id", ""))
+			var info := get_landing_zone_world_info(id)
+			if not info.is_empty():
+				print("\tDEBUG - Adding Landing Zone Collider")
+				_create_landing_zone_collider(info)
 
 	# Create landing zone markers (if debug enabled)
 	if debug_show_landing_zones:
@@ -721,3 +731,67 @@ func _create_landing_zone_markers() -> void:
 		
 		marker.z_index = terrain_z_index + 1
 		_terrain_root.add_child(marker)
+
+# TERRAIN-COLLIDE-TRY 
+func _create_landing_zone_collider(zone_info: Dictionary) -> void:
+	if zone_info.is_empty():
+		return
+
+	# In terrain_generator.gd, in _create_landing_zone_collider()
+	print("🟢 _create_landing_zone_collider CALLED for zone: ", zone_info.get("id", ""))
+
+	var zone_id:String = str(zone_info.get("id", ""))
+
+	var center_x: float = float(zone_info.get("center_x", 0.0))
+	var width: float = float(zone_info.get("width", 0.0))
+	var surface_y: float = float(zone_info.get("surface_y", 0.0))
+
+	var half_width := width * 0.5
+	var left_x := center_x - half_width
+	var right_x := center_x + half_width
+
+	# Create Area2D + CollisionShape2D
+	var area := Area2D.new()
+	area.name = "LandingZone_" + zone_id
+	area.set_meta("landing_zone_id", zone_id)
+	area.add_to_group("landing_zone")
+	
+	# ADD THESE LINES after creating the area:
+	area.collision_layer = 4   # Layer 3 for landing zones
+	area.collision_mask = 2    # Detect layer 2 (lander)
+	area.monitoring = true
+	area.monitorable = true
+
+	# Position at world coords under TerrainRoot
+	area.position = Vector2(center_x, surface_y)
+	
+	# ADD THESE LINES before adding area to tree:
+	area.body_entered.connect(_on_landing_zone_body_entered.bind(zone_id, zone_info))
+	area.body_exited.connect(_on_landing_zone_body_exited.bind(zone_id, zone_info))
+
+	var shape := CollisionShape2D.new()
+	var rect_shape := RectangleShape2D.new()
+
+	# Make a flat-ish box slightly above and below the surface
+	rect_shape.size = Vector2(width, 40.0)
+	shape.shape = rect_shape
+
+	area.add_child(shape)
+	_terrain_root.add_child(area)
+
+func _on_landing_zone_body_entered(body: Node2D, zone_id: String, zone_info: Dictionary) -> void:
+
+	if body.is_in_group("lander") or body is LanderController:
+		var impact_data := {}
+		if body.has_method("get_landing_state"):
+			impact_data = body.get_landing_state(self)
+		
+		# Emit with complete data
+		EventBus.emit_signal("touchdown", impact_data)
+		EventBus.emit_signal("lander_entered_landing_zone", zone_id, zone_info)
+		#EventBus.emit_signal("touchdown", zone_id, zone_info)
+		
+
+func _on_landing_zone_body_exited(body: Node2D, zone_id: String, zone_info: Dictionary) -> void:
+	if body.is_in_group("lander") or body is LanderController:
+		EventBus.emit_signal("lander_exited_landing_zone", zone_id, zone_info)

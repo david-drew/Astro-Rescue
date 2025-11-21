@@ -57,10 +57,6 @@ func _ready() -> void:
 # -------------------------------------------------------------------
 
 func _connect_eventbus() -> void:
-	if not Engine.has_singleton("EventBus"):
-		push_warning("[Game] EventBus singleton not found; mission flow will not react to events.")
-		return
-
 	var eb = EventBus
 
 	if not eb.is_connected("mission_config_set", Callable(self, "_on_mission_config_set")):

@@ -1,6 +1,6 @@
 ## res://scripts/systems/gravity_field_manager.gd
 extends Node2D
-#class_name GravityFieldManager
+class_name GravityFieldManager
 
 ##
 # GravityFieldManager - IMPROVED VERSION
@@ -21,9 +21,9 @@ extends Node2D
 # -------------------------------------------------------------------
 
 @export_category("Gravity Settings")
-@export var base_surface_gravity: float = 30.0  # Gravity at surface (pixels/sec²)
+@export var base_surface_gravity: float = 20.0  # Gravity at surface (pixels/sec²)
 @export var orbital_height: float = 5000.0      # Height where gravity becomes minimal (pixels)
-@export var min_gravity_ratio: float = 0.15     # Minimum gravity at orbital height (15% of surface)
+@export var min_gravity_ratio: float = 0.05     # Minimum gravity at orbital height (15% of surface)
 @export var gravity_curve_power: float = 2.0    # How quickly gravity increases (1.0=linear, 2.0=quadratic)
 
 @export_category("Reference Points")
