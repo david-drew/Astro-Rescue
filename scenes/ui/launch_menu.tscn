@@ -1,0 +1,92 @@
+[gd_scene load_steps=3 format=3 uid="uid://ceum4ki43unsg"]
+
+[ext_resource type="Script" uid="uid://ew0n2qo2qbrm" path="res://scripts/ui/launch_menu.gd" id="1_2e02k"]
+[ext_resource type="Texture2D" uid="uid://bygslllwrvfuk" path="res://assets/images/ui/starry_rocket_big_04.png" id="2_od4lw"]
+
+[node name="LaunchMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_2e02k")
+
+[node name="Background" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -450.0
+offset_bottom = 37.91223
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_od4lw")
+expand_mode = 5
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -1240.0
+offset_top = 100.0
+offset_right = -439.0
+offset_bottom = 275.0
+grow_horizontal = 0
+theme_override_font_sizes/font_size = 128
+text = "Astro Rescue"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Panel" type="Panel" parent="."]
+custom_minimum_size = Vector2(300, 400)
+layout_mode = 1
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = 200.0
+offset_top = -200.0
+offset_right = 500.0
+offset_bottom = 200.0
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -125.0
+offset_top = -166.0
+offset_right = 125.0
+offset_bottom = 166.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 20
+
+[node name="NewGameButton" type="Button" parent="Panel/VBoxContainer"]
+custom_minimum_size = Vector2(250, 80)
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "New Game"
+
+[node name="LoadGameButton" type="Button" parent="Panel/VBoxContainer"]
+custom_minimum_size = Vector2(250, 80)
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Load Game"
+
+[node name="SettingsButton" type="Button" parent="Panel/VBoxContainer"]
+custom_minimum_size = Vector2(250, 80)
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Settings"
+
+[node name="QuitButton" type="Button" parent="Panel/VBoxContainer"]
+custom_minimum_size = Vector2(250, 80)
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Quit"

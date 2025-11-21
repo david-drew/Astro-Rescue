@@ -1,0 +1,93 @@
+{
+  "id": "training_mission_03",
+  "display_name": "Training 03 – Precision Setdown",
+  "is_training": true,
+  "tier": 2,
+
+  "environment": {
+	"gravity_scale": 1.0,
+	"gravity": {
+	  "enabled": true,
+	  "strength": 0.5,
+	  "direction_deg": 90.0
+	},
+	"atmosphere": "thin",
+	"wind_profile_id": "gusty_crosswind_low",
+	"wind_strength_multiplier": 1.0,
+	"visibility": {
+	  "fog_type": "none",
+	  "fog_density": 0.0,
+	  "precipitation_type": "none",
+	  "precipitation_intensity": 0.0,
+	  "allow_reveal_tool": false
+	},
+	"physics_profile_id": "lunar_low_g"
+  },
+
+  "terrain": {
+	"seed": 0,
+	"length": 8000.0,
+	"segment_length": 32.0,
+	"baseline_y": 600.0,
+	"height_variation": 150.0,
+	"roughness": 0.65,
+	"landing_zones": [
+	  {
+		"id": "training_zone_03_main",
+		"center_x": 2600.0,
+		"width": 220.0
+	  }
+	]
+  },
+
+  "spawn": {
+	"start_above_zone_id": "training_zone_03_main",
+	"height_above_surface": 11000.0,
+	"offset_x": 0.0,
+	"initial_velocity": [0.0, 0.0]
+  },
+
+  "mission_modifiers": {
+	"allow_player_override": true,
+	"fuel_capacity_multiplier": 3.0,
+	"thrust_multiplier": 4.85,
+	"rotation_accel_multiplier": 1.0,
+	"max_angular_speed_multiplier": 1.0,
+	"start_fuel_ratio": 1.0
+  },
+
+  "hud_instruments": {
+	"allow_player_override": true,
+	"show_altitude": true,
+	"show_fuel": true,
+	"show_wind": true,
+	"show_gravity": true,
+	"show_timer": true
+  },
+
+  "failure_rules": {
+	"time_limit_seconds": 780.0,
+	"allow_abort": true,
+	"abort_counts_as_failure": false,
+	"hard_fail_on_lander_destroyed": true,
+	"hard_fail_on_player_death": true
+  },
+
+  "objectives": {
+	"primary": [
+	  {
+		"id": "land_safely_in_zone",
+		"description": "Land safely in the smaller training pad.",
+		"type": "landing",
+		"target_zone_id": "training_zone_03_main",
+		"max_impact_speed": 10.0
+	  }
+	],
+	"bonus": []
+  },
+
+  "rewards": {
+	"base_credits": 1000,
+	"bonus_credits": 200
+  }
+}

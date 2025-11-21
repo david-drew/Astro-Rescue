@@ -1,0 +1,139 @@
+{
+  "id": "training_lander_01",
+  "name": "Basic Touchdown",
+  "tier": 0,
+  "is_training": true,
+  "tags": ["tutorial", "lander_only", "safe"],
+  "seed": 123456,
+  "modes": ["lander"],
+
+  "biome_id": "training_vacuum_lowg",
+
+  "environment": {
+	"gravity_scale": 0.6,
+	"gravity": {
+	  "enabled": true,
+	  "strength": 1.62,  
+	  "direction_deg": 90.0 
+	},
+	"atmosphere": "none",
+	"wind_profile_id": "none",
+	"visibility": {
+	  "fog_type": "none",
+	  "fog_density": 0.0,
+	  "precipitation_type": "none",
+	  "precipitation_intensity": 0.0,
+	  "allow_reveal_tool": false
+	},
+	"physics_profile_id": "easy_training"
+  },
+
+  "terrain": {
+	"generator_id": "default_lunar",
+	"length": 3000.0,
+	"resolution": 4.0,
+	"landing_zones": [
+	  {
+		"id": "LZ_A",
+		"x": 1200.0,
+		"width": 140.0,
+		"flatness": 0.1,
+		"difficulty": 1
+	  }
+	],
+	"points_of_interest": [],
+	"hazards": {
+	  "crater_density": 0.2,
+	  "rock_density": 0.2,
+	  "sharp_rocks": false,
+	  "steep_slopes": false
+	}
+  },
+
+  "lander_setup": {
+	"required_lander_id": "starter_lander_A",
+	"allowed_lander_ids": ["starter_lander_A"],
+	"starting_fuel_ratio": 1.0,
+	"min_fuel_ratio_to_launch": 0.2,
+	"fuel_economy": {
+	  "fuel_cost_mode": "free",
+	  "fuel_cost_multiplier": 0.0
+	}
+  },
+
+  "crew_setup": {
+	"min_crew": 1,
+	"max_crew": 1,
+	"required_roles": ["pilot"],
+	"recommended_crew_ids": ["rookie_pilot_a"]
+  },
+
+  "objectives": {
+	"primary": [
+	  {
+		"id": "land_softly_in_LZ_A",
+		"type": "precision_landing",
+		"params": {
+		  "target_lz_id": "LZ_A",
+		  "max_vertical_speed": 3.0,
+		  "max_horizontal_speed": 2.0,
+		  "max_impact_force": 0.7,
+		  "max_tilt_angle_deg": 10.0,
+		  "must_remain_upright_seconds": 3.0
+		}
+	  },
+	  {
+		"id": "escape_to_orbit",
+		"type": "return_to_orbit",
+		"params": {
+		  "min_altitude": 1500.0,
+		  "max_time_seconds": 120.0
+		}
+	  }
+	],
+	"bonus": [
+	  {
+		"id": "fuel_saver",
+		"type": "fuel_remaining",
+		"params": {
+		  "min_fuel_ratio": 0.4
+		}
+	  },
+	  {
+		"id": "speedrunner",
+		"type": "time_under",
+		"params": {
+		  "max_time_seconds": 90.0
+		}
+	  }
+	]
+  },
+
+  "failure_rules": {
+	"hard_fail_on_player_death": true,
+	"hard_fail_on_lander_destroyed": true,
+	"allow_abort": true,
+	"abort_counts_as_failure": true,
+	"time_limit_seconds": null,
+	"training_crash_profile_id": "training_default"
+  },
+
+  "rewards": {
+	"reputation": {
+	  "on_success": 10,
+	  "on_partial": 5,
+	  "on_fail": -5
+	},
+	"funds": {
+	  "on_success": 500,
+	  "on_partial": 250,
+	  "on_fail": 0
+	},
+	"unlock_tags": ["tier_1_contracts_basic"]
+  },
+
+  "ui": {
+	"briefing_text_id": "mission_training_lander_01_brief",
+	"debrief_text_id": "mission_training_lander_01_debrief"
+  }
+}

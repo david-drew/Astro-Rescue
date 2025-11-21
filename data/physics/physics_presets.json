@@ -1,0 +1,16 @@
+{
+  "physics_presets": {
+	"lunar_low_g": {
+	  "base_gravity": 18.0,
+	  "air_drag": 0.0
+	},
+	"standard_gravity": {
+	  "base_gravity": 40.0,
+	  "air_drag": 0.1
+	},
+	"mars_gravity": {
+	  "base_gravity": 25.0,
+	  "air_drag": 0.02
+	}
+  }
+}

@@ -1,0 +1,73 @@
+[gd_scene load_steps=4 format=3 uid="uid://b3v5xi2iht5kv"]
+
+[ext_resource type="Script" uid="uid://bbndk2rrulggv" path="res://scripts/hq_controller.gd" id="1_j0f53"]
+[ext_resource type="Script" uid="uid://jpk57u2boiaa" path="res://scripts/ui/mission_board_manager.gd" id="1_sld6d"]
+[ext_resource type="Script" uid="uid://cxbs5wdb1b8do" path="res://scripts/debrief_panel.gd" id="2_j0f53"]
+
+[node name="HQ" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("1_j0f53")
+
+[node name="MissionBoard" type="Control" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_sld6d")
+
+[node name="MarginContainer" type="MarginContainer" parent="MissionBoard"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 100
+theme_override_constants/margin_top = 100
+theme_override_constants/margin_right = 100
+theme_override_constants/margin_bottom = 100
+
+[node name="EmtpyLabel" type="Label" parent="MissionBoard/MarginContainer"]
+layout_mode = 2
+text = "No Missions"
+
+[node name="MissionsContainer" type="VBoxContainer" parent="MissionBoard/MarginContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="DebriefPanel" type="Control" parent="."]
+visible = false
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("2_j0f53")
+
+[node name="MissionTitleLabel" type="Label" parent="DebriefPanel"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+theme_override_font_sizes/font_size = 32
+text = "Mission Title"
+
+[node name="OutcomeLabel" type="Label" parent="DebriefPanel"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 23.0
+
+[node name="DetailsRichText" type="RichTextLabel" parent="DebriefPanel"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="ContinueButton" type="Button" parent="DebriefPanel"]
+layout_mode = 0
+offset_right = 8.0
+offset_bottom = 8.0
+text = "Continue"

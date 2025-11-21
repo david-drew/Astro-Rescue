@@ -1,0 +1,33 @@
+{
+  "meta": {
+	"name": "astro_rescue_time_config",
+	"version": 1
+  },
+
+  "default_time_scale_id": "normal",
+
+  "time_scales": {
+	"normal":        { "scale": 1.0 },
+	"training_slow": { "scale": 0.75 },
+	"fast_forward":  { "scale": 3.0 },
+	"paused":        { "scale": 0.0 }
+  },
+
+  "tick_channels": {
+	"frame": {
+	  "interval_seconds": 0.0,
+	  "max_delta_seconds": 0.1,
+	  "enabled": true
+	},
+	"ui_hud": {
+	  "interval_seconds": 0.05,
+	  "max_delta_seconds": 0.2,
+	  "enabled": true
+	},
+	"world_sim": {
+	  "interval_seconds": 5.0,
+	  "max_delta_seconds": 2.0,
+	  "enabled": true
+	}
+  }
+}

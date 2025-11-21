@@ -1,0 +1,15 @@
+{
+  "wind_profiles": {
+    "none": {
+      "base_speed": 0.0,
+      "gust_frequency": 0.0,
+      "direction_deg": 0.0
+    },
+    "gusty_crosswind_low": {
+      "base_speed": 20.0,
+      "gust_frequency": 0.4,
+      "gust_strength_range": [1.0, 2.0],
+      "direction_deg": 90.0
+    }
+  }
+}

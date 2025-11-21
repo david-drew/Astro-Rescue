@@ -1,0 +1,119 @@
+{
+  "meta": {
+	"name": "astro_rescue_world_sim",
+	"version": 1
+  },
+
+  "initial_state": {
+	"campaign_time_seconds": 0.0,
+	"rescue_intensity": 0.1,
+	"training_rank": 0,
+	"unlocked_mission_ids": ["training_mission_01"],
+	"cooldowns": {},
+	"active_world_events": []
+  },
+
+  "rescue_intensity_config": {
+	"base_drift_per_minute": -0.01,
+	"min_intensity": 0.0,
+	"max_intensity": 1.0,
+	"on_mission_completed": {
+	  "training": -0.05,
+	  "standard": -0.03,
+	  "hard": -0.02
+	},
+	"on_mission_failed": {
+	  "training": 0.08,
+	  "standard": 0.10,
+	  "hard": 0.12
+	}
+  },
+
+  "training_rank_config": {
+	"max_rank": 3,
+	"ranks": [
+	  {
+		"rank": 0,
+		"name": "Rookie",
+		"required_successes": 0,
+		"unlocks_mission_ids": ["training_mission_01"]
+	  },
+	  {
+		"rank": 1,
+		"name": "Junior Trainee",
+		"required_successes": 3,
+		"unlocks_mission_ids": ["training_mission_02"]
+	  },
+	  {
+		"rank": 2,
+		"name": "Senior Trainee",
+		"required_successes": 6,
+		"unlocks_mission_ids": ["training_mission_03"]
+	  }
+	]
+  },
+
+  "mission_pool": {
+	"training": [
+	  {
+		"mission_id": "training_mission_01",
+		"tier": 0,
+		"min_rank": 0,
+		"max_rank": 2,
+		"base_weight": 1.0
+	  },
+	  {
+		"mission_id": "training_mission_02",
+		"tier": 1,
+		"min_rank": 0,
+		"max_rank": 3,
+		"base_weight": 1.0
+	  },
+	  {
+		"mission_id": "training_mission_03",
+		"tier": 2,
+		"min_rank": 1,
+		"max_rank": 3,
+		"base_weight": 1.0
+	  }
+	],
+	"standard": [],
+	"special": []
+  },
+
+  "cooldown_config": {
+	"special_mission_global": {
+	  "cooldown_seconds": 300.0
+	}
+  },
+
+  "event_templates": [
+	{
+	  "id": "precision_storm_challenge",
+	  "type": "special_mission_offer",
+	  "mission_id": "training_mission_03",
+	  "min_rank": 1,
+	  "max_rank": 3,
+	  "min_intensity": 0.3,
+	  "max_intensity": 0.9,
+	  "duration_seconds": 600.0
+	}
+  ],
+
+  "mission_modifiers_rules": {
+	"from_rescue_intensity": {
+	  "wind_strength_multiplier": {
+		"min_intensity": 0.0,
+		"max_intensity": 1.0,
+		"min_value": 0.5,
+		"max_value": 1.5
+	  },
+	  "reward_multiplier": {
+		"min_intensity": 0.0,
+		"max_intensity": 1.0,
+		"min_value": 1.0,
+		"max_value": 1.5
+	  }
+	}
+  }
+}
