@@ -27,17 +27,11 @@ extends Control
 @onready var settings_button: Button    = $Panel/VBoxContainer/SettingsButton
 @onready var quit_button: Button        = $Panel/VBoxContainer/QuitButton
 
-@onready var dialogue_ui:Control = $"../DialoguePanel"
 @onready var hq_ui:Control = $"../HQ"
 @onready var lander_hud:Control = $"../LanderHUD"
 
 func _ready() -> void:
-	#hq_ui.visible = false
-	#dialogue_ui.visible = false
-	#lander_hud.visible = false
-	#print("...print all nodes...")
-	#print_all_nodes(get_tree().root)
-	
+
 	# Connect buttons if present
 	if new_game_button != null and not new_game_button.pressed.is_connected(Callable(self, "_on_new_game_pressed")):
 		new_game_button.pressed.connect(Callable(self, "_on_new_game_pressed"))
@@ -64,17 +58,7 @@ func _on_new_game_pressed() -> void:
 	if debug_logging:
 		print("[LaunchMenu] New Game pressed")
 
-	# 1) Reset the profile to a clean "new career" state
-	if GameState.has_method("reset_profile"):
-		GameState.reset_profile()
-	elif debug_logging:
-		print("[LaunchMenu] GameState.reset_profile() not found.")
-
-	var game := get_tree().get_root().get_node("Game")
-	if game != null and game.has_method("start_new_career"):
-		game.start_new_career()
-	else:
-		print("ERROR: Critical Error, root Game node not found.")
+	EventBus.emit_signal("new_game_requested")
 
 func _on_load_game_pressed() -> void:
 	print("New Game Pressed But We're Doing Nothing")

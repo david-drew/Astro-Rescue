@@ -185,7 +185,6 @@ func _load_mission_config() -> void:
 						_mission_config = loaded2
 						GameState.current_mission_config = loaded2.duplicate(true)
 
-
 	if _mission_config.is_empty():
 		print("\tERROR both mission file loads FAILED")
 		push_warning("MissionController: No mission config available (GameState empty and file load failed).")
@@ -395,6 +394,7 @@ func _position_lander_from_spawn() -> void:
 	# ----------------------------------------------------------
 	# 3) Debug output (ALWAYS show this, not just in debug_logging mode)
 	# ----------------------------------------------------------
+	'''
 	print("[MissionController] === SPAWN DEBUG ===")
 	print("  Config height_above_surface: ", height_above_surface)
 	print("  Actual terrain surface_y: ", surface_y)
@@ -404,6 +404,7 @@ func _position_lander_from_spawn() -> void:
 	print("  Final spawn position: ", spawn_pos)
 	print("  Calculated altitude: ", surface_y - spawn_pos.y, " pixels")
 	print("  Expected altitude: ", height_above_surface, " pixels")
+	'''
 	
 	if abs((surface_y - spawn_pos.y) - height_above_surface) > 1.0:
 		push_warning("[MissionController] Altitude mismatch! Check terrain generation.")
@@ -815,15 +816,13 @@ func _end_mission(success_state: String, reason: String) -> void:
 	var mission_result := _build_mission_result(success_state, reason)
 
 	# Store in GameState so Debrief UI can read it.
-	if Engine.has_singleton("GameState"):
-		GameState.current_mission_result = mission_result.duplicate(true)
+	GameState.current_mission_result = mission_result.duplicate(true)
 
 	# Broadcast via EventBus.
-	if Engine.has_singleton("EventBus"):
-		if success_state == "success" or success_state == "partial":
-			EventBus.emit_signal("mission_completed", _mission_id, mission_result)
-		else:
-			EventBus.emit_signal("mission_failed", _mission_id, reason, mission_result)
+	if success_state == "success" or success_state == "partial":
+		EventBus.emit_signal("mission_completed", _mission_id, mission_result)
+	else:
+		EventBus.emit_signal("mission_failed", _mission_id, reason, mission_result)
 
 	if debug_logging:
 		print("[MissionController] Mission ended: id=", _mission_id, " state=", success_state, " reason=", reason)
@@ -1097,11 +1096,42 @@ func _connect_orbital_view_signals() -> void:
 	if not _orbital_view.is_connected("zone_selected", Callable(self, "_on_orbital_zone_selected")):
 		_orbital_view.connect("zone_selected", Callable(self, "_on_orbital_zone_selected"))
 	
+	if not _orbital_view.is_connected("transition_started", Callable(self, "_on_orbital_transition_started")):
+		_orbital_view.connect("transition_started", Callable(self, "_on_orbital_transition_started"))
+	
 	if not _orbital_view.is_connected("transition_completed", Callable(self, "_on_orbital_transition_completed")):
 		_orbital_view.connect("transition_completed", Callable(self, "_on_orbital_transition_completed"))
 	
 	if debug_logging:
 		print("[MissionController] OrbitalView signals connected")
+
+func _on_orbital_transition_started() -> void:
+	##
+	# Called when camera transition begins
+	# Pass the target world position to orbital view
+	##
+	if debug_logging:
+		print("[MissionController] Orbital transition started")
+	
+	# Get target position we stored earlier
+	var target_pos: Vector2 = get_meta("transition_target_position", Vector2.ZERO)
+	
+	if target_pos == Vector2.ZERO:
+		push_warning("[MissionController] No target position stored for transition!")
+		# Fallback
+		if _terrain_generator != null:
+			var center_x := _terrain_generator.get_center_x()
+			var surface_y := _terrain_generator.get_highest_point_y()
+			target_pos = Vector2(center_x, surface_y - 12000.0)
+	
+	# Tell orbital view to zoom to this position
+	if _orbital_view != null and _orbital_view.has_method("begin_zoom_to_position"):
+		_orbital_view.begin_zoom_to_position(target_pos)
+		
+		if debug_logging:
+			print("[MissionController] Camera zooming to: ", target_pos)
+
+
 
 # ==================================================================
 # STEP 5: Add Signal Handlers for OrbitalView
@@ -1115,6 +1145,32 @@ func _on_orbital_zone_selected(zone_id: String) -> void:
 	if not _mission_config.has("spawn"):
 		_mission_config["spawn"] = {}
 	_mission_config["spawn"]["start_above_zone_id"] = zone_id
+	
+	# Get the actual world position of this landing zone
+	var target_position := Vector2.ZERO
+	
+	if _terrain_generator != null:
+		# Get landing zone info from terrain generator
+		var zone_info: Dictionary = _terrain_generator.get_landing_zone_world_info(zone_id)
+		if not zone_info.is_empty():
+			var center_x: float = float(zone_info.get("center_x", 0.0))
+			var surface_y: float = float(zone_info.get("surface_y", 600.0))
+			
+			# Position camera high above the zone for landing
+			var spawn_altitude: float = float(_mission_config.get("spawn", {}).get("height_above_surface", 12000.0))
+			target_position = Vector2(center_x, surface_y - spawn_altitude)
+			
+			if debug_logging:
+				print("[MissionController] Landing zone world position: ", target_position)
+		else:
+			push_warning("[MissionController] Could not find landing zone info for: ", zone_id)
+			# Fallback to terrain center
+			var center_x := _terrain_generator.get_center_x()
+			var surface_y := _terrain_generator.get_highest_point_y()
+			target_position = Vector2(center_x, surface_y - 12000.0)
+	
+	# Store target position for camera transition
+	set_meta("transition_target_position", target_position)
 
 func _on_orbital_transition_completed() -> void:
 	if debug_logging:
@@ -1122,9 +1178,12 @@ func _on_orbital_transition_completed() -> void:
 	
 	_orbital_transition_complete = true
 	
-	# Hide orbital view
+	# Hide orbital view (disables orbital camera)
 	if _orbital_view != null:
 		_orbital_view.hide_orbital_view()
+	
+	# Enable gameplay camera
+	_enable_gameplay_camera()
 	
 	# Show world/lander
 	_show_landing_gameplay()
@@ -1132,8 +1191,34 @@ func _on_orbital_transition_completed() -> void:
 	# NOW start the mission and emit signal
 	_mission_state = "running"
 	
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("mission_started", _mission_id)
+	EventBus.emit_signal("mission_started", _mission_id)
+
+func _enable_gameplay_camera() -> void:
+	##
+	# Enable the gameplay camera (usually attached to lander or separate)
+	##
+	# Option 1: Camera on lander
+	if _lander != null and _lander.has_node("Camera2D"):
+		var cam := _lander.get_node("Camera2D") as Camera2D
+		if cam != null:
+			cam.enabled = true
+			if debug_logging:
+				print("[MissionController] Lander camera enabled")
+	
+	# Option 2: Separate gameplay camera
+	var gameplay_cam := get_node_or_null("../World/GameplayCamera") as Camera2D
+	if gameplay_cam != null:
+		gameplay_cam.enabled = true
+		if debug_logging:
+			print("[MissionController] Gameplay camera enabled")
+	
+	# Option 3: Use camera_2d.gd if you have it
+	var main_cam := get_node_or_null("../Camera2D") as Camera2D
+	if main_cam != null:
+		main_cam.enabled = true
+		if debug_logging:
+			print("[MissionController] Main camera enabled")
+
 
 func _start_with_orbital_view() -> void:
 	##
@@ -1171,6 +1256,7 @@ func _start_without_orbital_view() -> void:
 	
 	EventBus.emit_signal("mission_started", _mission_id)
 
+
 func _hide_landing_gameplay() -> void:
 	##
 	# Hide World node and Lander for orbital view
@@ -1181,28 +1267,37 @@ func _hide_landing_gameplay() -> void:
 		if debug_logging:
 			print("[MissionController] World node hidden")
 	
+	# IMPORTANT: Freeze and hide the gameplay lander (RigidBody2D)
 	if _lander != null:
 		_lander.visible = false
+		
+		# Freeze physics so it doesn't fall during orbital view
+		if _lander is RigidBody2D:
+			_lander.freeze = true
+			if debug_logging:
+				print("[MissionController] Lander frozen (physics disabled)")
+		
 		if debug_logging:
 			print("[MissionController] Lander hidden")
 	
-	# Hide terrain generator visuals
+	# Hide terrain
 	if _terrain_generator != null:
 		var terrain_body := _terrain_generator.get_terrain_body()
 		if terrain_body != null:
 			terrain_body.visible = false
-			if debug_logging:
-				print("[MissionController] Terrain body hidden")
 	
-	# NEW: Hide terrain tiles
+	# Hide terrain tiles
 	if _terrain_tiles_controller != null:
 		if _terrain_tiles_controller.has_method("hide_tiles"):
 			_terrain_tiles_controller.hide_tiles()
-		if debug_logging:
-			print("[MissionController] Terrain tiles hidden")
 	
 	if debug_logging:
 		print("[MissionController] Landing gameplay hidden")
+
+
+# ==================================================================
+# UPDATE: _show_landing_gameplay() in mission_controller.gd
+# ==================================================================
 
 func _show_landing_gameplay() -> void:
 	##
@@ -1214,28 +1309,39 @@ func _show_landing_gameplay() -> void:
 		if debug_logging:
 			print("[MissionController] World node shown")
 	
-	if _lander != null:
-		_lander.visible = true
-		if debug_logging:
-			print("[MissionController] Lander shown")
-	
-	# Show terrain generator visuals
+	# Show terrain
 	if _terrain_generator != null:
 		var terrain_body := _terrain_generator.get_terrain_body()
 		if terrain_body != null:
 			terrain_body.visible = true
-			if debug_logging:
-				print("[MissionController] Terrain body shown")
 	
-	# NEW: Show terrain tiles
+	# Show terrain tiles
 	if _terrain_tiles_controller != null:
 		if _terrain_tiles_controller.has_method("show_tiles"):
 			_terrain_tiles_controller.show_tiles()
-		if debug_logging:
-			print("[MissionController] Terrain tiles shown")
 	
-	# Now position lander and apply mission modifiers
+	# Position lander FIRST (while still frozen)
 	_position_lander_from_spawn()
+	
+	# IMPORTANT: Show and unfreeze the gameplay lander
+	if _lander != null:
+		_lander.visible = true
+		
+		# Unfreeze physics so gameplay can begin
+		if _lander is RigidBody2D:
+			_lander.freeze = false
+			
+			# Reset velocities to ensure clean start
+			_lander.linear_velocity = Vector2.ZERO
+			_lander.angular_velocity = 0.0
+			
+			if debug_logging:
+				print("[MissionController] Lander unfrozen (physics enabled)")
+		
+		if debug_logging:
+			print("[MissionController] Lander shown at position: ", _lander.global_position)
+	
+	# Apply mission modifiers and HUD config
 	_apply_mission_modifiers()
 	_apply_mission_hud_config()
 	

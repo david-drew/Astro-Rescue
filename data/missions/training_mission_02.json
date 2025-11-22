@@ -94,5 +94,42 @@
   "rewards": {
 	"base_credits": 750,
 	"bonus_credits": 100
+  },
+
+ "orbital_view": {
+		"enabled": true,
+		"planet_visual": {
+		  "texture_id": "moon_gray",
+		  "radius": 360.0,
+		  "rotation_speed": 0.12,
+		  "color_tint": "#c0c0c0"
+		},
+		"lander_orbit": {
+		  "orbit_radius": 470.0,
+		  "orbit_speed": 0.7,
+		  "show_thrust_on_descent": true
+		},
+			"landing_zones": [{
+				"id": "training_zone_01",
+				"display_name": "Training Zone Alpha",
+				"icon_type": "flag",
+				"difficulty": "easy",
+				"color": "#00ff00",
+				"angle_deg": 45.0,
+				"description": "Wide, flat landing area."
+			  }
+		],
+			"dialogue": [{
+				"speaker": "Mission Control",
+				"text": "Welcome to your first landing mission, pilot."
+			 }
+		],
+			"camera_transition": {
+			  "zoom_duration": 2.5,
+			  "zoom_easing": "ease_in_out",
+			  "planet_flatten_start_altitude": 8000.0,
+			  "planet_flatten_end_altitude": 2000.0
+			}
   }
+
 }

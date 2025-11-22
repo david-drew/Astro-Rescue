@@ -1,16 +1,151 @@
-[gd_scene load_steps=4 format=3 uid="uid://b3v5xi2iht5kv"]
+[gd_scene load_steps=9 format=3 uid="uid://b3v5xi2iht5kv"]
 
 [ext_resource type="Script" uid="uid://bbndk2rrulggv" path="res://scripts/hq_controller.gd" id="1_j0f53"]
 [ext_resource type="Script" uid="uid://jpk57u2boiaa" path="res://scripts/ui/mission_board_manager.gd" id="1_sld6d"]
-[ext_resource type="Script" uid="uid://cxbs5wdb1b8do" path="res://scripts/debrief_panel.gd" id="2_j0f53"]
+[ext_resource type="Texture2D" uid="uid://dyx4vd6foak4a" path="res://assets/images/ui/moonbase_01_HQ.png" id="2_j13xk"]
+[ext_resource type="Script" uid="uid://dd5xqw46qmcs5" path="res://scripts/ui/crew_manager.gd" id="3_4jwxx"]
+[ext_resource type="Texture2D" uid="uid://c0k4wwast6olj" path="res://assets/images/ui/button_close_metallic_sf_01.png" id="4_j6p2v"]
+[ext_resource type="Script" uid="uid://c727pfv3pdv6l" path="res://scripts/ui/store_manager.gd" id="4_j13xk"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_j6p2v"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_6axbc"]
 
 [node name="HQ" type="Control"]
-visible = false
 layout_mode = 3
-anchors_preset = 0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_j0f53")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(2.0214916e-06, 0.34318787, 0.64277726, 1)
+
+[node name="TextureRect" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -1720.0
+offset_top = -1220.0
+offset_right = 1720.0
+offset_bottom = 708.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_j13xk")
+expand_mode = 3
+stretch_mode = 5
+
+[node name="ControlPanel" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -340.0
+offset_top = -20.0
+offset_right = -300.0
+offset_bottom = 20.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="PanelBG" type="Panel" parent="ControlPanel"]
+custom_minimum_size = Vector2(250, 400)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -250.0
+offset_right = 150.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="ControlPanel/PanelBG"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -80.0
+offset_top = -191.0
+offset_right = 80.0
+offset_bottom = 191.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 20
+
+[node name="Label" type="Label" parent="ControlPanel/PanelBG/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "CONTROLS"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VSeparator" type="VSeparator" parent="ControlPanel/PanelBG/VBox"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_styles/separator = SubResource("StyleBoxEmpty_j6p2v")
+
+[node name="MissionButton" type="Button" parent="ControlPanel/PanelBG/VBox"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+tooltip_text = "Glory, Honor, and Fat Stacks of Cash"
+theme_override_font_sizes/font_size = 32
+text = "MISSIONS"
+
+[node name="CrewButton" type="Button" parent="ControlPanel/PanelBG/VBox"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+tooltip_text = "Manage	 and Recruit Crew"
+theme_override_font_sizes/font_size = 32
+text = "CREW"
+
+[node name="StoreButton" type="Button" parent="ControlPanel/PanelBG/VBox"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+tooltip_text = "Fuel & Upgrades"
+theme_override_font_sizes/font_size = 32
+text = "STORE"
+
+[node name="VSeparator2" type="VSeparator" parent="ControlPanel/PanelBG/VBox"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_styles/separator = SubResource("StyleBoxEmpty_6axbc")
+
+[node name="StatusStrip" type="RichTextLabel" parent="ControlPanel/PanelBG/VBox"]
+layout_mode = 2
+
+[node name="CommsButton" type="Button" parent="ControlPanel/PanelBG/VBox"]
+layout_mode = 2
+disabled = true
+text = "COMMS"
+
+[node name="LogButton" type="Button" parent="ControlPanel/PanelBG/VBox"]
+layout_mode = 2
+disabled = true
+text = "LOG"
+
+[node name="TextureRect" type="TextureRect" parent="ControlPanel"]
+visible = false
+layout_mode = 0
 offset_right = 40.0
 offset_bottom = 40.0
-script = ExtResource("1_j0f53")
 
 [node name="MissionBoard" type="Control" parent="."]
 visible = false
@@ -22,7 +157,112 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_sld6d")
 
-[node name="MarginContainer" type="MarginContainer" parent="MissionBoard"]
+[node name="Panel" type="Panel" parent="MissionBoard"]
+self_modulate = Color(1, 1, 1, 0.9137255)
+custom_minimum_size = Vector2(2000, 900)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -1000.0
+offset_top = -600.0
+offset_right = 1000.0
+offset_bottom = 500.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="EmptyLabel" type="Label" parent="MissionBoard/Panel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -212.0
+offset_top = -33.5
+offset_right = 212.0
+offset_bottom = 33.5
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 64
+text = "No Missions"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MissionBoard/Panel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -500.0
+offset_top = -493.5
+offset_right = 500.0
+offset_bottom = 493.5
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_constants/separation = 20
+
+[node name="TitleLabel" type="Label" parent="MissionBoard/Panel/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 48
+text = "Available Missions"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MissionsContainer" type="VBoxContainer" parent="MissionBoard/Panel/VBoxContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(1400, 900)
+layout_mode = 2
+
+[node name="SubmitButton" type="Button" parent="MissionBoard/Panel"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -120.0
+offset_top = -60.0
+offset_right = -57.0
+offset_bottom = -29.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_font_sizes/font_size = 32
+text = "Submit"
+
+[node name="CloseButton" type="TextureButton" parent="MissionBoard"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -773.0
+offset_top = 129.0
+offset_right = -709.0
+offset_bottom = 193.0
+grow_horizontal = 0
+scale = Vector2(0.75, 0.75)
+texture_normal = ExtResource("4_j6p2v")
+stretch_mode = 5
+
+[node name="CrewManager" type="Control" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_4jwxx")
+
+[node name="MarginContainer" type="MarginContainer" parent="CrewManager"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -34,40 +274,40 @@ theme_override_constants/margin_top = 100
 theme_override_constants/margin_right = 100
 theme_override_constants/margin_bottom = 100
 
-[node name="EmtpyLabel" type="Label" parent="MissionBoard/MarginContainer"]
+[node name="EmptyLabel" type="Label" parent="CrewManager/MarginContainer"]
 layout_mode = 2
 text = "No Missions"
 
-[node name="MissionsContainer" type="VBoxContainer" parent="MissionBoard/MarginContainer"]
-unique_name_in_owner = true
+[node name="CrewContainer" type="VBoxContainer" parent="CrewManager/MarginContainer"]
 layout_mode = 2
 
-[node name="DebriefPanel" type="Control" parent="."]
+[node name="StoreManager" type="Control" parent="."]
 visible = false
-anchors_preset = 0
-offset_right = 40.0
-offset_bottom = 40.0
-script = ExtResource("2_j0f53")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("4_j13xk")
 
-[node name="MissionTitleLabel" type="Label" parent="DebriefPanel"]
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 23.0
-theme_override_font_sizes/font_size = 32
-text = "Mission Title"
+[node name="MarginContainer" type="MarginContainer" parent="StoreManager"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 100
+theme_override_constants/margin_top = 100
+theme_override_constants/margin_right = 100
+theme_override_constants/margin_bottom = 100
 
-[node name="OutcomeLabel" type="Label" parent="DebriefPanel"]
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 23.0
+[node name="EmptyLabel" type="Label" parent="StoreManager/MarginContainer"]
+layout_mode = 2
+text = "No Missions"
 
-[node name="DetailsRichText" type="RichTextLabel" parent="DebriefPanel"]
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="StoreContainer" type="VBoxContainer" parent="StoreManager/MarginContainer"]
+layout_mode = 2
 
-[node name="ContinueButton" type="Button" parent="DebriefPanel"]
-layout_mode = 0
-offset_right = 8.0
-offset_bottom = 8.0
-text = "Continue"
+[connection signal="pressed" from="MissionBoard/CloseButton" to="MissionBoard" method="_on_close_button_pressed"]

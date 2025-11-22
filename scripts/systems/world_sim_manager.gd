@@ -287,9 +287,6 @@ func ensure_minimum_board_missions(min_missions: int) -> void:
 	# - Uses MissionGenerator to create new missions when needed.
 	# - Respects GameState.max_missions as a FIFO capacity.
 	##
-	if not Engine.has_singleton("GameState"):
-		push_warning("WorldSimManager.ensure_minimum_board_missions: GameState singleton not found.")
-		return
 
 	# Only enforce this rule after training is complete.
 	if not GameState.training_complete:
@@ -301,7 +298,7 @@ func ensure_minimum_board_missions(min_missions: int) -> void:
 		return
 
 	var to_add: int = min_missions - current_count
-	var gen: Node = _get_mission_generator()
+	var gen: Node = MissionGenerator.new()
 	if gen == null:
 		# We cannot fulfill the invariant without a generator.
 		push_warning("WorldSimManager.ensure_minimum_board_missions: MissionGenerator not available; cannot add missions.")
@@ -322,34 +319,11 @@ func ensure_minimum_board_missions(min_missions: int) -> void:
 
 	GameState.available_missions = missions
 
-
-func _get_mission_generator() -> Node:
-	##
-	# Tries to locate MissionGenerator.
-	# Assumes it is either:
-	#  - an autoload singleton named "MissionGenerator", or
-	#  - a node at /root/Game/Systems/MissionGenerator (mirroring MissionGenerator's
-	#    own search path for WorldSimManager).
-	##
-	if Engine.has_singleton("MissionGenerator"):
-		return Engine.get_singleton("MissionGenerator")
-
-	var node := get_node_or_null("/root/Game/Systems/MissionGenerator")
-	if node != null:
-		return node
-
-	return null
-
-
 func _generate_regular_mission_for_board(gen: Node) -> Dictionary:
 	##
 	# Asks MissionGenerator for a regular (non-training) mission suitable
 	# for the board. You can enrich the context later (tags, difficulty, region).
 	##
-	if not gen.has_method("generate_mission"):
-		push_warning("WorldSimManager: MissionGenerator is missing generate_mission(context).")
-		return {}
-
 	var context: Dictionary = {
 		"is_training": false,
 		# Later you can add:
@@ -720,4 +694,4 @@ func _process_training_outcome(mission_id: String, success_state: String) -> voi
 		GameState.training_progress = 3
 		GameState.training_complete = true
 
-		ensure_minimum_board_missions(2) 		# Eensure the mission board starts with 2+ missions.
+		ensure_minimum_board_missions(2) 		# Ensure the mission board starts with 2+ missions.

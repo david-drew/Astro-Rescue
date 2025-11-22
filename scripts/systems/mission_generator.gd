@@ -59,21 +59,12 @@ const TIER_THRESHOLDS := [
 ]
 
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
-
-var _world_sim: Node = null
+var world_sim: Node = null
 
 
 func _ready() -> void:
 	_rng.randomize()
-
-	# Auto-bind if WorldSimManager is present in the Systems tree
-	if Engine.has_singleton("WorldSimManager"):
-		_world_sim = Engine.get_singleton("WorldSimManager")
-	else:
-		# Fallback: try well-known scene path
-		var ws = get_node_or_null("/root/Game/Systems/WorldSimManager")
-		if ws != null:
-			_world_sim = ws
+	world_sim = WorldSimManager.new()
 
 func generate_mission(context: Dictionary) -> Dictionary:
 	##
@@ -158,21 +149,18 @@ func generate_mission(context: Dictionary) -> Dictionary:
 		"ui": ui_info
 	}
 
-	# Optional WorldSim integration (Mode 1)
-	if _world_sim != null and _world_sim.has_method("decorate_mission_config"):
-		mission_config = _world_sim.decorate_mission_config(mission_config)
+	# TODO: WorldSim is supposed to tweak and decorate missions
+	#mission_config = world_sim.decorate_mission_config(mission_config)
 
 	return mission_config
 
 func generate_training_mission() -> Dictionary:
-	if _world_sim != null and _world_sim.has_method("choose_training_mission"):
-		var mid:String = _world_sim.choose_training_mission()
-		return generate_mission({
-			"is_training": true,
-			"forced_archetype_id": mid
-		})
+	var mid:String = world_sim.choose_training_mission()
+	return generate_mission({
+		"is_training": true,
+		"forced_archetype_id": mid
+	})
 
-	return generate_mission({"	is_training": true})
 
 
 # -------------------------------------------------------------------

@@ -64,6 +64,9 @@ var _dialogue_blocked: bool = true  # Block zone selection until dialogue done
 var _planet_center: Vector2 = Vector2.ZERO
 var _planet_radius: float = 320.0
 
+# Orbital view is positioned FAR from gameplay area
+const ORBITAL_VIEW_OFFSET: Vector2 = Vector2(-50000, -50000)
+
 # State machine
 enum State {
 	HIDDEN,
@@ -104,12 +107,13 @@ func _update_orbit_animation(delta: float) -> void:
 	if _lander_orbit_angle > TAU:
 		_lander_orbit_angle -= TAU
 	
-	# Calculate position on orbit
+	# Calculate position on orbit (relative to planet center)
 	var orbit_pos := Vector2(
-		_planet_center.x + cos(_lander_orbit_angle) * _lander_orbit_radius,
-		_planet_center.y + sin(_lander_orbit_angle) * _lander_orbit_radius
+		cos(_lander_orbit_angle) * _lander_orbit_radius,
+		sin(_lander_orbit_angle) * _lander_orbit_radius
 	)
-	_lander_sprite.global_position = orbit_pos
+	# Position relative to planet (which is at _planet_center)
+	_lander_sprite.position = _planet_center + orbit_pos
 	
 	# Rotate sprite to face tangent to orbit (looks like it's moving)
 	_lander_sprite.rotation = _lander_orbit_angle + PI / 2.0
@@ -160,13 +164,17 @@ func show_orbital_view() -> void:
 	visible = true
 	set_process(true)
 	
+	# Enable orbital camera so we see this view, not gameplay
+	if _orbital_camera != null:
+		_orbital_camera.enabled = true
+	
 	if skip_dialogue or _dialogue_queue.is_empty():
 		_skip_to_selection()
 	else:
 		_start_dialogue()
 	
 	if debug_logging:
-		print("[OrbitalView] Showing orbital view")
+		print("[OrbitalView] Showing orbital view, camera enabled")
 
 func hide_orbital_view() -> void:
 	##
@@ -176,8 +184,22 @@ func hide_orbital_view() -> void:
 	set_process(false)
 	_state = State.HIDDEN
 	
+	# Disable orbital camera so gameplay camera takes over
+	if _orbital_camera != null:
+		_orbital_camera.enabled = false
+	
 	if debug_logging:
-		print("[OrbitalView] Hidden")
+		print("[OrbitalView] Hidden, camera disabled")
+
+func begin_zoom_to_position(target_world_position: Vector2) -> void:
+	##
+	# Begin camera transition to a specific world position
+	# Called by MissionController with the actual landing zone position
+	##
+	if _orbital_camera != null and _orbital_camera.has_method("begin_zoom_transition"):
+		_orbital_camera.begin_zoom_transition(target_world_position)
+	else:
+		_complete_transition()
 
 func begin_transition_to_landing() -> void:
 	##
@@ -194,9 +216,13 @@ func begin_transition_to_landing() -> void:
 	if debug_logging:
 		print("[OrbitalView] Beginning transition to landing...")
 	
-	# Trigger camera zoom (handled by OrbitalCamera or parent controller)
-	if _orbital_camera != null and _orbital_camera.has_method("begin_zoom_transition"):
-		_orbital_camera.begin_zoom_transition(_selected_zone_id)
+	# Get the actual world position of the landing zone from terrain generator
+	# This needs to be passed from MissionController
+	# For now, use a signal to request it
+	if _orbital_camera != null:
+		# Camera will be given target position by MissionController
+		# via the begin_zoom_to_position() method
+		pass
 	else:
 		# Fallback: immediate transition
 		_complete_transition()
@@ -212,7 +238,7 @@ func _parse_config() -> void:
 	# Planet visual settings
 	var planet_cfg: Dictionary = _config.get("planet_visual", {})
 	_planet_radius = float(planet_cfg.get("radius", 320.0))
-	_planet_center = Vector2.ZERO  # Center in orbital view space
+	_planet_center = ORBITAL_VIEW_OFFSET  # Far from gameplay area
 	
 	# Lander orbit settings
 	var lander_cfg: Dictionary = _config.get("lander_orbit", {})
@@ -504,7 +530,7 @@ func _setup_camera() -> void:
 		_orbital_camera.name = "OrbitalCamera"
 		add_child(_orbital_camera)
 	
-	_orbital_camera.position = _planet_center
+	_orbital_camera.position = _planet_center  # Positioned at orbital view offset
 	_orbital_camera.enabled = false  # Will be enabled when view is shown
 
 # -------------------------------------------------------------------

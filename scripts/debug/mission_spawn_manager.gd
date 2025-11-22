@@ -192,9 +192,9 @@ static func debug_print_spawn_info(
 	var landing_zones: Array = terrain_config.get("landing_zones", [])
 	for zone_cfg in landing_zones:
 		if typeof(zone_cfg) == TYPE_DICTIONARY:
-			var zone_id = zone_cfg.get("id", "unknown")
-			var zone_info = terrain_generator.get_landing_zone_world_info(zone_id)
-			print("Zone '", zone_id, "': ", zone_info)
+			var zid = zone_cfg.get("id", "unknown")
+			var zone_info = terrain_generator.get_landing_zone_world_info(zid)
+			print("Zone '", zid, "': ", zone_info)
 	
 	print("\n--- Calculated Spawn Position ---")
 	var zone_id: String = spawn_config.get("start_above_zone_id", "")
