@@ -47,10 +47,10 @@ var _landing_zones: Array = []  # Array of zone config dictionaries
 var _zone_markers: Array = []  # Array of LandingZoneMarker nodes
 var _selected_zone_id: String = ""
 
-var _lander_sprite: Sprite2D = null
-var _lander_orbit_angle: float = 0.0
-var _lander_orbit_radius: float = 450.0
-var _lander_orbit_speed: float = 0.8
+var rocket_sprite: Sprite2D = null
+var rocket_orbit_angle: float = 0.0
+var rocket_orbit_radius: float = 450.0
+var rocket_orbit_speed: float = 0.8
 
 var _planet_center: Vector2 = Vector2.ZERO
 var _planet_radius: float = 320.0
@@ -91,26 +91,33 @@ func _process(delta: float) -> void:
 			_update_orbit_animation(delta)
 		State.TRANSITIONING:
 			pass  # Transition handled by camera
+			
+	# TODO DEBUG DELETE 
+	if Engine.get_physics_frames() % 60 == 0:
+		var cam := get_viewport().get_camera_2d()
+		print("Current camera is: ", cam)
+
+
 
 func _update_orbit_animation(delta: float) -> void:
-	if _lander_sprite == null:
+	if rocket_sprite == null:
 		return
 	
 	# Rotate lander around planet
-	_lander_orbit_angle += _lander_orbit_speed * delta
-	if _lander_orbit_angle > TAU:
-		_lander_orbit_angle -= TAU
+	rocket_orbit_angle += rocket_orbit_speed * delta
+	if rocket_orbit_angle > TAU:
+		rocket_orbit_angle -= TAU
 	
 	# Calculate position on orbit (relative to planet center)
 	var orbit_pos := Vector2(
-		cos(_lander_orbit_angle) * _lander_orbit_radius,
-		sin(_lander_orbit_angle) * _lander_orbit_radius
+		cos(rocket_orbit_angle) * rocket_orbit_radius,
+		sin(rocket_orbit_angle) * rocket_orbit_radius
 	)
 	# Position relative to planet (which is at _planet_center)
-	_lander_sprite.position = _planet_center + orbit_pos
+	rocket_sprite.position = _planet_center + orbit_pos
 	
 	# Rotate sprite to face tangent to orbit (looks like it's moving)
-	_lander_sprite.rotation = _lander_orbit_angle + PI / 2.0
+	rocket_sprite.rotation = rocket_orbit_angle + PI / 2.0
 
 # -------------------------------------------------------------------
 # Public API
@@ -160,9 +167,10 @@ func show_orbital_view() -> void:
 	# Enable orbital camera so we see this view, not gameplay
 	if _orbital_camera != null:
 		_orbital_camera.enabled = true
-	
-	if debug_logging:
-		print("[OrbitalView] Showing orbital view, camera enabled")
+		_orbital_camera.make_current()
+		if debug_logging:
+			print("[OrbitalView] Showing orbital view, camera enabled + current")
+
 
 func hide_orbital_view() -> void:
 	##
@@ -172,6 +180,9 @@ func hide_orbital_view() -> void:
 	# Disable orbital camera so gameplay camera takes over
 	if _orbital_camera != null:
 		_orbital_camera.enabled = false
+		if _orbital_camera.is_current():
+			_orbital_camera.clear_current()
+
 	
 	if debug_logging:
 		print("[OrbitalView] Hidden, camera disabled")
@@ -230,9 +241,9 @@ func _parse_config() -> void:
 	_planet_center = Vector2.ZERO 				# ORBITAL_VIEW_OFFSET  # Far from gameplay area
 	
 	# Lander orbit settings
-	var lander_cfg: Dictionary = _config.get("lander_orbit", {})
-	_lander_orbit_radius = float(lander_cfg.get("orbit_radius", 450.0))
-	_lander_orbit_speed = float(lander_cfg.get("orbit_speed", 0.8))
+	var rocket_cfg: Dictionary = _config.get("lander_orbit", {})
+	rocket_orbit_radius = float(rocket_cfg.get("orbit_radius", 450.0))
+	rocket_orbit_speed = float(rocket_cfg.get("orbit_speed", 0.8))
 	
 	# Landing zones
 	_landing_zones = _config.get("landing_zones", [])
@@ -293,17 +304,17 @@ func _create_simple_planet_texture(sprite: Sprite2D) -> void:
 	sprite.centered = true
 
 func _create_lander_sprite() -> void:
-	_lander_sprite = Sprite2D.new()
-	_lander_sprite.name = "OrbitingLander"
-	add_child(_lander_sprite)
+	rocket_sprite = Sprite2D.new()
+	rocket_sprite.name = "OrbitingLander"
+	add_child(rocket_sprite)
 	
-	var lander_image:Image = Image.new()
-	var err = lander_image.load("res://assets/images/rocket_prime_01.png")
+	var rocket_image:Image = Image.new()
+	var err = rocket_image.load("res://assets/images/rocket_prime_01.png")
 	
 	if err != OK:
 		# Create simple lander visual (triangle pointing right)
-		lander_image = Image.create(32, 32, false, Image.FORMAT_RGBA8)
-		lander_image.fill(Color.TRANSPARENT)
+		rocket_image = Image.create(32, 32, false, Image.FORMAT_RGBA8)
+		rocket_image.fill(Color.TRANSPARENT)
 	
 		# Draw triangle (simplified lander shape)
 		var white := Color.WHITE
@@ -311,13 +322,13 @@ func _create_lander_sprite() -> void:
 			var y_offset := int((x - 16) * 0.6)
 			for y in range(16 - y_offset, 16 + y_offset + 1):
 				if y >= 0 and y < 32:
-					lander_image.set_pixel(x, y, white)
+					rocket_image.set_pixel(x, y, white)
 	
-	var lander_texture := ImageTexture.create_from_image(lander_image)
-	_lander_sprite.texture = lander_texture
-	_lander_sprite.centered = true
+	var rocket_texture := ImageTexture.create_from_image(rocket_image)
+	rocket_sprite.texture = rocket_texture
+	rocket_sprite.centered = true
 
-	_lander_orbit_angle = -PI / 2.0		# Start at top of orbit
+	rocket_orbit_angle = -PI / 2.0		# Start at top of orbit
 	_update_orbit_animation(0.0)		# Make sure orbit is immediate (otherwise sits in planet center for several seconds)
 	
 	if debug_logging:
@@ -530,15 +541,12 @@ func _activate_lander_camera() -> void:
 	# 1. Disable OrbitalView camera if it exists
 	$OrbitalCamera.enabled = false
 
-	print("\t................Activating Lander CAM.............................")		# TODO DEBUG
-
 	# 2. Enable the Lander’s camera
 	#var _woild = get_node_or_null("/root/Game/World")
 	var _lander = get_node_or_null("/root/Game/World/Lander")
 	if _lander:
-		var lander_cam := _lander.get_node_or_null("Camera2D")
+		var lander_cam := _lander.get_node_or_null("LanderCam")
 		if lander_cam:
-			print("\t...........Got Lander and Cam!!!!............")
 			lander_cam.enabled = true
 			lander_cam.make_current()
 			#_woild.visible = true

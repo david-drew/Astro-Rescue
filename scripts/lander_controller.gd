@@ -97,14 +97,16 @@ var _hud_frame_counter: int = 0
 var _last_emitted_altitude: float = 0.0
 var _last_emitted_fuel: float = 1.0
 
+
+# TODO DEBUG DELETE	
+var _last_vel: Vector2 = Vector2.ZERO
+var _last_frame_logged: int = 0
+
 # -------------------------------------------------------------------
 # Lifecycle
 # -------------------------------------------------------------------
 
 func _ready() -> void:
-	print("[Lander] My path: ", get_path())
-	print("[Lander] My parent: ", get_parent().name)
-
 	_current_fuel = fuel_capacity
 	if fuel_capacity <= 0.0:
 		_current_fuel = 0.0
@@ -191,14 +193,16 @@ func _physics_process(delta: float) -> void:
 			_emit_hud_updates()
 
 
-
-func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
+func PREV_integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 	# TEST: Apply a massive sideways force
-	state.apply_central_force(Vector2(10000, 0))
+	#state.apply_central_force(Vector2(0, 200)) 		# TODO DEBUG
 
+	
 	# DEBUG: Print every 60 frames
 	if Engine.get_physics_frames() % 60 == 0:
+		var cam := get_viewport().get_camera_2d()
 		print("=== INTEGRATE_FORCES DEBUG ===")
+		print("\tCurrent camera is: ", cam)
 		print("  _current_gravity_vector: ", _current_gravity_vector)
 		print("  mass: ", mass)
 		print("  freeze: ", freeze)
@@ -221,6 +225,24 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 	if Engine.get_physics_frames() % 60 == 0:
 		print("  [END] state.linear_velocity: ", state.linear_velocity)
 		print("  [END] state.transform.origin: ", state.transform.origin)
+
+func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
+	# Apply custom gravity as a force
+	if _current_gravity_vector != Vector2.ZERO:
+		state.apply_central_force(_current_gravity_vector * mass)
+
+	# Every 60 frames, compare velocity to last logged velocity
+	var f := Engine.get_physics_frames()
+	if f % 60 == 0 and f != _last_frame_logged:
+		var dv := state.linear_velocity - _last_vel
+		print("=== GRAVITY EFFECT CHECK ===")
+		print("  v_now: ", state.linear_velocity)
+		print("  v_prev: ", _last_vel)
+		print("  dv over 60 frames: ", dv)
+		print("  approx accel: ", dv / (60.0 * state.step))
+		_last_vel = state.linear_velocity
+		_last_frame_logged = f
+
 
 # -------------------------------------------------------------------
 # Control / thrust
