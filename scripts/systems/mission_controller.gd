@@ -35,9 +35,12 @@ extends Node
 @export var orbital_view_path: NodePath = NodePath("")  # NEW!
 
 @export_category("Mission Data")
-var _mission_begun: bool = false
 @export var mission_data_dir: String = "res://data/missions"
 @export var mission_file_id: String = ""  # e.g. "training_mission_01" or "mission_01"
+var _chosen_zone_id: String = ""
+var _mission_begun: bool = false
+var _mission_prepared: bool = false
+
 
 # -------------------------------------------------------------------
 # Internal state
@@ -72,7 +75,7 @@ var _orbit_reached_time: float = 0.0
 
 var _terrain_generator: TerrainGenerator = null
 var _terrain_tiles_controller: TerrainTilesController = null
-var _lander: Node = null
+var _lander: RigidBody2D = null
 var _hud: Node = null
 var _orbital_view: OrbitalView = null  			# NEW!
 var _using_orbital_view: bool = false  			# NEW!
@@ -85,9 +88,11 @@ var _orbital_transition_complete: bool = false  # NEW!
 
 func _reset_mission_runtime_state() -> void:
 	# Reset per-mission runtime state so we can safely start a new mission.
+	_mission_prepared = false
 	_mission_begun = false
 	_mission_state = "not_started"		# TODO - these 2 vars look like dupes
 	
+	_chosen_zone_id = ""
 	_mission_elapsed_time = 0.0
 
 	_current_fuel_ratio = 1.0
@@ -297,7 +302,6 @@ func _apply_mission_terrain() -> void:
 	EventBus.emit_signal("terrain_generated", _terrain_generator)
 
 	# TODO DEBUG
-	print("\tgot to check MC1")
 	if _terrain_generator and _terrain_generator.has_method("get_landing_zone_ids"):
 		var ids: Array = _terrain_generator.get_landing_zone_ids()
 		print("[MissionController] Terrain zones now: ", ids)
@@ -322,139 +326,70 @@ func _apply_mission_tiles() -> void:
 	tiles_controller.build_tiles_from_mission(_mission_config)
 
 
-func _position_lander_from_spawn() -> void:
+func _position_lander_from_spawn(zid:String="") -> void:
 	if _lander == null:
 		print("[MissionController] ERROR: No Lander, cannot set spawn point.")
 		return
 
+	# Bind or confirm terrain generator.
+	if _terrain_generator == null and terrain_generator_path != NodePath(""):
+		_terrain_generator = get_tree().current_scene.get_node_or_null(terrain_generator_path) as TerrainGenerator
+	if _terrain_generator == null:
+		push_warning("[MissionController] Cannot position lander; no TerrainGenerator available.")
+		return
+
+	# If a zone was selected via OrbitalView, use that first.
+	if zid != "":
+		var zone_info := _terrain_generator.get_landing_zone_world_info(zid)
+		if zone_info != null:
+			var default_spawn_height := 10000.0
+			#landing_zone.spawn_position = Vector2( zone_center_x, surface_y - default_spawn_height )
+			
+			#var spawn_pos: Vector2 = zone_info.spawn_position		# hallucination, but we might want something like this later
+			var spawn_pos:Vector2 = Vector2(500.0,-10000.0)
+			
+			# Safety: offset above terrain if provided
+			if zone_info.has("spawn_offset"):
+				spawn_pos.y -= float(zone_info.spawn_offset)
+
+			# RigidBody2D-safe teleport
+			if _lander is RigidBody2D:
+				PhysicsServer2D.body_set_state(
+					_lander.get_rid(),
+					PhysicsServer2D.BODY_STATE_TRANSFORM,
+					Transform2D.IDENTITY.translated(spawn_pos)
+				)
+			else:
+				_lander.global_position = spawn_pos
+
+			if debug_logging:
+				print("[MissionController] Positioned lander at zone '%s' : %s" % [zid, str(spawn_pos)])
+
+			return
+		else:
+			push_warning("[MissionController] Zone '%s' not found; falling back to mission default spawn." % zid)
+
+	# Fallback: original fixed mission spawn config
 	var spawn_cfg: Dictionary = _mission_config.get("spawn", {})
 	if spawn_cfg.is_empty():
 		print("[MissionController] WARN: Mission has no 'spawn' block; using current lander position.")
 		return
 
-	var terrain_cfg: Dictionary = _mission_config.get("terrain", {})
-
-	var start_zone_id: String = String(spawn_cfg.get("start_above_zone_id", ""))
-	var height_above_surface: float = float(spawn_cfg.get("height_above_surface", 30000.0))
-	var offset_x: float = float(spawn_cfg.get("offset_x", 0.0))
-	var initial_velocity_arr: Array = spawn_cfg.get("initial_velocity", [0.0, 0.0])
-
-	# Defaults
-	var center_x: float = 0.0
-	var surface_y: float = 600.0  # Fallback only
-
-	#if _terrain_generator == null:
-	#	_terrain_generator = get_node_or_null("/root/Game/World/TerrainGenerator")
-
-	# ----------------------------------------------------------
-	# 1) Get ACTUAL terrain surface from TerrainGenerator
-	# ----------------------------------------------------------
-	# CRITICAL FIX: Use actual generated terrain surface, not baseline_y
-	if _terrain_generator != null:
-		# Get actual highest point of generated terrain
-		surface_y = _terrain_generator.get_highest_point_y()
-		
-		if debug_logging:
-			print("[MissionController] Using actual terrain surface_y from generator: ", surface_y)
-		
-		# If spawn is above a specific landing zone, use that zone's surface
-		if start_zone_id != "" and start_zone_id != "any":
-			var zone_info: Dictionary = _terrain_generator.get_landing_zone_world_info(start_zone_id)
-			if not zone_info.is_empty():
-				# Use landing zone's center_x and surface_y
-				center_x = float(zone_info.get("center_x", center_x))
-				# Landing zones have their own surface_y (they're flattened)
-				var zone_surface_y = zone_info.get("surface_y", null)
-				if zone_surface_y != null:
-					surface_y = float(zone_surface_y)
-				
-				if debug_logging:
-					print("[MissionController] Using landing zone '", start_zone_id, "' info:")
-					print("  center_x: ", center_x)
-					print("  surface_y: ", surface_y)
-			else:
-				push_warning("[MissionController] Landing zone '", start_zone_id, "' not found in terrain generator!")
-				# Fallback to terrain center
-				center_x = _terrain_generator.get_center_x()
-		else:
-			# No specific zone, use terrain center
-			center_x = _terrain_generator.get_center_x()
-			if debug_logging:
-				print("[MissionController] Using terrain center_x: ", center_x)
-	else:
-		# Fallback: Parse from terrain config (old behavior)
-		push_warning("[MissionController] TerrainGenerator not available, using config baseline_y!")
-		
-		if not terrain_cfg.is_empty():
-			surface_y = float(terrain_cfg.get("baseline_y", 600.0))
-
-			var landing_zones: Array = terrain_cfg.get("landing_zones", [])
-			if start_zone_id != "" and landing_zones.size() > 0:
-				for zone_cfg in landing_zones:
-					if typeof(zone_cfg) != TYPE_DICTIONARY:
-						continue
-					var zid: String = String(zone_cfg.get("id", ""))
-					if zid == start_zone_id:
-						center_x = float(zone_cfg.get("center_x", 0.0))
-						break
-
-			# If we didn't find the specific zone, fall back to terrain center
-			if center_x == 0.0:
-				var length: float = float(terrain_cfg.get("length", 8000.0))
-				center_x = length * 0.5
-
-	# ----------------------------------------------------------
-	# 2) Build final spawn position / velocity
-	# ----------------------------------------------------------
-	var spawn_pos := Vector2(center_x + offset_x, surface_y - height_above_surface)
-	var spawn_velocity := Vector2.ZERO
-
-	if initial_velocity_arr.size() >= 2:
-		spawn_velocity = Vector2(float(initial_velocity_arr[0]), float(initial_velocity_arr[1]))
-
-	# ----------------------------------------------------------
-	# 3) Debug output (ALWAYS show this, not just in debug_logging mode)
-	# ----------------------------------------------------------
-	'''
-	print("[MissionController] === SPAWN DEBUG ===")
-	print("  Config height_above_surface: ", height_above_surface)
-	print("  Actual terrain surface_y: ", surface_y)
-	print("  Landing zone ID: ", start_zone_id if start_zone_id != "" else "none (using terrain center)")
-	print("  Center X: ", center_x)
-	print("  Offset X: ", offset_x)
-	print("  Final spawn position: ", spawn_pos)
-	print("  Calculated altitude: ", surface_y - spawn_pos.y, " pixels")
-	print("  Expected altitude: ", height_above_surface, " pixels")
-	'''
-	
-	if abs((surface_y - spawn_pos.y) - height_above_surface) > 1.0:
-		push_warning("[MissionController] Altitude mismatch! Check terrain generation.")
-	
-	if debug_logging:
-		print("[MissionController] Initial velocity: ", spawn_velocity)
-
-	# ----------------------------------------------------------
-	# 4) Apply spawn position
-	# ----------------------------------------------------------
-	_lander.global_position = spawn_pos
-
-	PhysicsServer2D.body_set_state(
-		_lander.get_rid(),
-		PhysicsServer2D.BODY_STATE_TRANSFORM,
-		Transform2D.IDENTITY.translated(spawn_pos)
-	)
+	var spawn_pos: Vector2 = spawn_cfg.get("position", _lander.global_position)
+	spawn_pos = Vector2(500.0,-10000.0)
+	print("\tUsing backup spawn POS")
 
 	if _lander is RigidBody2D:
-		var rb := _lander as RigidBody2D
-		rb.linear_velocity = spawn_velocity
-		rb.angular_velocity = 0.0
-	
-	# Set altitude reference for lander HUD
-	if _lander.has_method("set") and "altitude_reference_y" in _lander:
-		_lander.set("altitude_reference_y", surface_y)
+		PhysicsServer2D.body_set_state(
+			_lander.get_rid(),
+			PhysicsServer2D.BODY_STATE_TRANSFORM,
+			Transform2D.IDENTITY.translated(spawn_pos)
+		)
+	else:
+		_lander.global_position = spawn_pos
 
-	print("Positioning Lander at: ", spawn_pos )
-	print("Surface Y at: ", surface_y )
+	if debug_logging:
+		print("[MissionController] Positioned lander from fixed mission spawn: ", spawn_pos)
 
 func _setup_mission_timer() -> void:
 	_reset_mission_timer()
@@ -532,11 +467,17 @@ func _on_time_tick(channel_id: String, dt_game: float, _dt_real: float) -> void:
 # External calls from other scripts
 # -------------------------------------------------------------------
 
-func begin_mission() -> void:
+#func begin_mission() -> void:
+func prepare_mission() -> void:
 	print("\t....................CRAZY BEGIN MISSION RECYCLE")
 	##
 	# Start (or restart) a mission using the current GameState state.
 	##
+	if _mission_prepared:
+		if debug_logging:
+			print("[MC] prepare_mission() ignored; already prepared.")
+		return
+	
 	_reset_mission_runtime_state()
 	_load_mission_config()
 	
@@ -546,8 +487,6 @@ func begin_mission() -> void:
 			print("[MissionController] begin_mission() aborted: no mission_config loaded.")
 		return
 	
-	_mission_begun = true
-
 	# NEW: Check if mission uses orbital view
 	var orbital_cfg: Dictionary = _mission_config.get("orbital_view", {})
 	_using_orbital_view = orbital_cfg.get("enabled", false)
@@ -576,13 +515,58 @@ func begin_mission() -> void:
 	_apply_mission_terrain()
 	_apply_mission_tiles()
 	
+	_hide_landing_gameplay()
+	
+	_mission_prepared = true
+	
 	# Branch based on orbital view usage
 	# Start with OV = required to run OrbitalView
 	if _using_orbital_view and _orbital_view != null:
 		_start_with_orbital_view()
 	else:
-		_start_without_orbital_view()
+		#_start_without_orbital_view()
+		start_landing_gameplay()
 
+func start_landing_gameplay() -> void:
+	print("\t..............MC START LANDING...............")
+	# Phase B: reveal terrain + spawn/position lander + activate camera.
+	if not _mission_prepared:
+		push_warning("[MC] Cannot start landing; mission not prepared.")
+		return	
+	print("\t..............MC START LANDING 2...............")
+	if _mission_begun:
+		if debug_logging:
+			print("[MC] start_landing_gameplay() ignored; already begun.")
+		return
+	print("\t..............MC START LANDING 3...............")
+	_show_landing_gameplay()
+
+	# Ensure lander ref is current (Systems nodes can't trust _ready-time binding).
+	_bind_lander()
+	if _lander == null:
+		push_warning("[MissionController] start_landing_gameplay(): lander is null.")
+		return
+	else:
+		print("\t.................LANDER IS NULL")
+
+
+	# Let the lander reset itself and apply loadout/mission config.
+	if _lander.has_method("apply_mission_modifiers"):
+		print("Apply Mission Mods")
+		_lander.apply_mission_modifiers(_mission_config)
+	else:
+		print("NOOOOOOOOOOOOOO Apply Mission Mods")
+
+	if _chosen_zone_id != "":
+		_position_lander_from_spawn(_chosen_zone_id)
+
+	_enable_gameplay_camera()
+	_mission_state = "running"
+	
+	if EventBus.has_signal("mission_started"):
+		EventBus.emit_signal("mission_started")
+	
+	_mission_begun = true
 
 func notify_orbit_reached(altitude: float) -> void:
 	##
@@ -1186,6 +1170,8 @@ func _on_orbital_zone_selected(zone_id: String) -> void:
 	if _terrain_generator != null:
 		# Get landing zone info from terrain generator
 		var zone_info: Dictionary = _terrain_generator.get_landing_zone_world_info(zone_id)
+		_chosen_zone_id = zone_id
+
 		if not zone_info.is_empty():
 			var center_x: float = float(zone_info.get("center_x", 0.0))
 			var surface_y: float = float(zone_info.get("surface_y", 600.0))
@@ -1211,6 +1197,7 @@ func _on_orbital_transition_completed() -> void:
 		print("[MissionController] Orbital transition completed")
 	
 	_orbital_transition_complete = true
+	start_landing_gameplay()
 	
 	# Hide orbital view (disables orbital camera)
 	if _orbital_view != null:
@@ -1232,27 +1219,13 @@ func _enable_gameplay_camera() -> void:
 	##
 	# Enable the gameplay camera (usually attached to lander or separate)
 	##
-	# Option 1: Camera on lander
+	# Camera on lander
 	if _lander != null and _lander.has_node("Camera2D"):
 		var cam := _lander.get_node("Camera2D") as Camera2D
 		if cam != null:
 			cam.enabled = true
 			if debug_logging:
 				print("[MissionController] Lander camera enabled")
-	
-	# Option 2: Separate gameplay camera
-	var gameplay_cam := get_node_or_null("../World/GameplayCamera") as Camera2D
-	if gameplay_cam != null:
-		gameplay_cam.enabled = true
-		if debug_logging:
-			print("[MissionController] Gameplay camera enabled")
-	
-	# Option 3: Use camera_2d.gd if you have it
-	var main_cam := get_node_or_null("../Camera2D") as Camera2D
-	if main_cam != null:
-		main_cam.enabled = true
-		if debug_logging:
-			print("[MissionController] Main camera enabled")
 
 
 func _start_with_orbital_view() -> void:
@@ -1352,12 +1325,6 @@ func _show_landing_gameplay() -> void:
 			print("[MissionController] World node shown")
 	
 	var _lander:RigidBody2D = get_node_or_null("/root/Game/World/Lander")
-	if _lander != null:
-		print("\t....................WTF??!!!!!!!!!!")
-		_lander.visible = true
-		#_lander.Camera2D.enable
-	else:
-		print("\tNULL LANDA NULL.......................................")
 	
 	# Show terrain
 	if _terrain_generator != null:
@@ -1397,3 +1364,31 @@ func _show_landing_gameplay() -> void:
 	
 	if debug_logging:
 		print("[MissionController] Landing gameplay shown")
+
+func _bind_lander() -> void:
+	# Clear stale reference
+	_lander = null
+
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+
+	# 1) Preferred method: use the exported NodePath (inspector-friendly)
+	if lander_path != NodePath(""):
+		var ln := scene.get_node_or_null(lander_path)
+		if ln != null:
+			_lander = ln as Node2D
+			return
+
+	# 2) Fallback: try to find World/Lander
+	var world_node := scene.get_node_or_null("World")
+	if world_node != null:
+		var ln2 := world_node.get_node_or_null("Lander")
+		if ln2 != null:
+			_lander = ln2 as Node2D
+			return
+
+	# 3) Last-resort fallback: check group "lander" (if you ever want this)
+	# var landers := scene.get_tree().get_nodes_in_group("lander")
+	# if landers.size() > 0:
+	#     _lander = landers[0] as Node2D

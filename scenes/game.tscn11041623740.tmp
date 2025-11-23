@@ -69,6 +69,7 @@ script = ExtResource("9_trtic")
 
 [node name="GravityFieldManager" type="Node2D" parent="Systems"]
 script = ExtResource("5_ir15t")
+debug_logging = true
 
 [node name="World" type="Node2D" parent="."]
 

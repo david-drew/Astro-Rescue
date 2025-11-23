@@ -10,7 +10,7 @@
 
   "environment": {
 	"gravity": {
-		  "strength": 0.8,
+		  "strength": 18.0,
 		  "direction_deg": 90.0
 	},
 	"atmosphere": "thin",

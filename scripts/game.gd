@@ -151,7 +151,6 @@ func _apply_mode_processing() -> void:
 		world.set_process(false)
 		world.set_physics_process(false)
 
-
 func _enter_launch_menu() -> void:
 	_set_mode(GameMode.LAUNCH_MENU)
 
@@ -201,12 +200,8 @@ func _on_briefing_launch_requested() -> void:
 	if debug_logging:
 		print("[Game] briefing_launch_requested")
 
-	if use_orbital_view and orbital_view:
-		print("Briefing2OrbitalView")		# TODO
-		_enter_orbital_view()
-	else:
-		_start_mission_from_brief_or_orbit()
-
+	var mc:Node = get_node_or_null("/root/Game/Systems/MissionController")
+	mc.prepare_mission()
 
 func _on_debrief_return_requested() -> void:
 	# Player dismissed debrief.
@@ -251,14 +246,14 @@ func _on_orbital_transition_completed() -> void:
 func _start_mission_from_brief_or_orbit() -> void:
 	# Shared start point after Brief or after OrbitalView.
 	_enter_mission_running()
-	mission_controller.begin_mission()
+	mission_controller.prepare_mission()
 
 
 # -------------------------------------------------------------------
 # Mission lifecycle handlers (MissionController -> Game)
 # -------------------------------------------------------------------
 
-func _on_mission_started(mission_id: String) -> void:
+func _on_mission_started(mission_id:String="") -> void:
 	if debug_logging:
 		print("[Game] mission_started: ", mission_id)
 
