@@ -17,7 +17,7 @@ func reload_all() -> void:
 	var paths: Array = _scan_for_json(missions_root)
 
 	for p in paths:
-		var cfg: Dictionary = DataManager.load_json(p)
+		var cfg: Dictionary = DataManager._load_json_file(p)
 		if cfg.is_empty():
 			continue
 
@@ -151,8 +151,8 @@ func _normalize(cfg: Dictionary, path: String) -> Dictionary:
 	if not cfg.has("difficulty"):
 		cfg["difficulty"] = 1
 
-	if not cfg.has("recommended_skill"):
-		cfg["recommended_skill"] = ""
+	if not cfg.has("recommended_skills"):
+		cfg["recommended_skills"] = [] 
 
 	if not cfg.has("expires_in_days"):
 		cfg["expires_in_days"] = null

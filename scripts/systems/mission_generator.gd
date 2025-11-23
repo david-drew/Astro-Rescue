@@ -1,6 +1,6 @@
 ## res://scripts/core/mission_generator.gd
 extends Node
-#class_name MissionGenerator
+class_name MissionGenerator
 
 ##
 # MissionGenerator
@@ -155,13 +155,15 @@ func generate_mission(context: Dictionary) -> Dictionary:
 	return mission_config
 
 func generate_training_mission() -> Dictionary:
-	var mid:String = world_sim.choose_training_mission()
+	var cfg:Dictionary = world_sim.choose_training_mission()
+	var mid:String = ""
+	if not cfg.is_empty():
+		mid = String(cfg.get("id", ""))
+
 	return generate_mission({
 		"is_training": true,
 		"forced_archetype_id": mid
 	})
-
-
 
 # -------------------------------------------------------------------
 # Tier / Difficulty

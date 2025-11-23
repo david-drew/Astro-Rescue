@@ -68,7 +68,10 @@ func activate_orbital_camera() -> void:
 	# Enable this camera for orbital view
 	##
 	enabled = true
+	make_current()
 	zoom = orbital_zoom
+
+
 	
 	if debug_logging:
 		print("[OrbitalCamera] Activated for orbital view")

@@ -242,14 +242,51 @@ func _sync_world_state_to_gamestate(emit_signal: bool) -> void:
 func get_world_state() -> Dictionary:
 	return _world_state.duplicate(true)
 
-
 func get_available_training_missions() -> Array:
+	# Returns Array[Dictionary] of tutorial mission configs.
+	# Primary source: MissionRegistry (category == "tutorial").
+	# Secondary filters: unlocked/rank/unique if training pool rules exist.
 	var result: Array = []
 
+	# ---- 0) Pull all tutorial missions from registry ----
+	var all_missions: Array = MissionRegistry.get_all()
+	if all_missions.is_empty():
+		return result
+
+	var tutorial_catalog: Array = []
+	for m in all_missions:
+		if typeof(m) != TYPE_DICTIONARY:
+			continue
+		var category: String = String(m.get("category", "uncategorized"))
+		if category == "tutorial":
+			tutorial_catalog.append(m)
+
+	if tutorial_catalog.is_empty():
+		return result
+
+	# If there are no training rules in config, just return catalog
+	var training_pool: Array = _mission_pool_cfg.get("training", [])
+	if training_pool.is_empty():
+		# Optional: sort by difficulty so the early ones come first
+		tutorial_catalog.sort_custom(func(a, b):
+			return int(a.get("difficulty", 0)) < int(b.get("difficulty", 0))
+		)
+		return tutorial_catalog
+
+	# ---- 1) Apply unlocked/rank/unique rules if present ----
+	_auto_unlock_training_for_rank()
+
 	var unlocked: Array = _world_state.get("unlocked_mission_ids", [])
+	var completed: Array = _world_state.get("completed_mission_ids", [])
 	var training_rank: int = int(_world_state.get("training_rank", 0))
 
-	var training_pool: Array = _mission_pool_cfg.get("training", [])
+	# Build a map id -> mission cfg from the registry
+	var by_id: Dictionary = {}
+	for m in tutorial_catalog:
+		var mid: String = String(m.get("id", ""))
+		if mid != "":
+			by_id[mid] = m
+
 	for entry in training_pool:
 		if typeof(entry) != TYPE_DICTIONARY:
 			continue
@@ -258,21 +295,31 @@ func get_available_training_missions() -> Array:
 		if mission_id == "":
 			continue
 
-		# Only consider missions that are unlocked.
+		# Must exist in registry tutorial catalog
+		if not by_id.has(mission_id):
+			continue
+
+		# Must be unlocked
 		if not unlocked.has(mission_id):
 			continue
 
+		# Rank window
 		var min_rank: int = int(entry.get("min_rank", 0))
 		var max_rank: int = int(entry.get("max_rank", 9999))
-
 		if training_rank < min_rank:
 			continue
 		if training_rank > max_rank:
 			continue
 
-		result.append(mission_id)
+		# Unique filter
+		var unique: bool = entry.get("unique", true)
+		if unique and completed.has(mission_id):
+			continue
+
+		result.append(by_id[mission_id])
 
 	return result
+
 
 ## ------------------------------------------------------------------
 ## Mission Board / Available Missions
@@ -283,41 +330,74 @@ func ensure_minimum_board_missions(min_missions: int) -> void:
 	# Guarantees that, AFTER TRAINING, the mission board (GameState.available_missions)
 	# has at least `min_missions` missions.
 	#
-	# - If training is not complete, this does nothing.
-	# - Uses MissionGenerator to create new missions when needed.
-	# - Respects GameState.max_missions as a FIFO capacity.
+	# NEW BEHAVIOR:
+	# - Primary source is MissionRegistry (authored missions on disk).
+	# - MissionGenerator becomes fallback only if registry can't supply enough.
+	# - Respects FIFO capacity as before.
 	##
-
-	# Only enforce this rule after training is complete.
-	if not GameState.training_complete:
-		return
-
 	var missions: Array = GameState.available_missions
 	var current_count: int = missions.size()
 	if current_count >= min_missions:
 		return
 
 	var to_add: int = min_missions - current_count
-	var gen: Node = MissionGenerator.new()
-	if gen == null:
-		# We cannot fulfill the invariant without a generator.
-		push_warning("WorldSimManager.ensure_minimum_board_missions: MissionGenerator not available; cannot add missions.")
-		return
 
-	for i in range(to_add):
-		var mission_cfg: Dictionary = _generate_regular_mission_for_board(gen)
-		if mission_cfg.is_empty():
-			# Generator could not produce a mission (e.g. no templates).
-			break
-		missions.append(mission_cfg)
+	# ---- 1) Try to add authored missions from MissionRegistry ----
+	var authored_to_add: Array = _pick_regular_missions_from_registry(to_add)
+	for m in authored_to_add:
+		missions.append(m)
 
-	# Respect FIFO capacity
+	# Recompute how many we still need
+	current_count = missions.size()
+	if current_count < min_missions:
+		to_add = min_missions - current_count
+	else:
+		to_add = 0
+
+	# ---- 2) Fallback to generator only if still short ----
+	if to_add > 0:
+		var gen: Node = MissionGenerator.new()
+		if gen == null:
+			push_warning("WorldSimManager.ensure_minimum_board_missions: MissionGenerator not available; cannot add fallback missions.")
+		else:
+			for i in range(to_add):
+				var mission_cfg: Dictionary = _generate_regular_mission_for_board(gen)
+				if mission_cfg.is_empty():
+					break
+				missions.append(mission_cfg)
+
+	# ---- FIFO capacity stays the same ----
 	var max_missions: int = GameState.max_missions
 	while missions.size() > max_missions:
-		# Remove oldest mission
 		missions.pop_front()
 
+	# TODO
+	print("[WorldSim] ensure_minimum_board_missions: training_complete=", GameState.training_complete,
+		" before=", current_count, " after=", missions.size(), " max=", GameState.max_missions)
+
 	GameState.available_missions = missions
+
+func refresh_board_missions_for_hq() -> void:
+	##
+	# Populates GameState.available_missions appropriately for the HQ MissionBoard.
+	# - During tutorials: shows eligible tutorial missions.
+	# - After tutorials: ensures minimum regular missions exist.
+	##
+
+	if not GameState.training_complete:
+		print("TRAINING INCOMPLETE (CORRECT)")
+		var tutorials: Array = get_available_training_missions() # returns Array[Dictionary]
+		print("Num Tutorials: ", tutorials.size())
+		GameState.available_missions = tutorials
+		if debug_logging:
+			print("[WorldSimManager] HQ refresh: tutorial missions=", tutorials.size())
+		return
+
+	# Post-training normal flow
+	ensure_minimum_board_missions(2)
+	if debug_logging:
+		print("[WorldSimManager] HQ refresh: regular missions=", GameState.available_missions.size())
+
 
 func _generate_regular_mission_for_board(gen: Node) -> Dictionary:
 	##
@@ -595,6 +675,50 @@ func _classify_mission_for_intensity(result: Dictionary) -> String:
 # Helpers
 # -------------------------------------------------------------------
 
+func _auto_unlock_training_for_rank() -> void:
+	##
+	# Ensures tutorial missions marked auto_unlock=true in world_sim.json
+	# are added to _world_state.unlocked_mission_ids when the player's
+	# training_rank enters their [min_rank, max_rank] window.
+	#
+	# Depends on:
+	#   _world_state["training_rank"]
+	#   _world_state["unlocked_mission_ids"]
+	#   _mission_pool_cfg["training"]
+	##
+	if typeof(_world_state) != TYPE_DICTIONARY:
+		return
+
+	var training_rank: int = int(_world_state.get("training_rank", 0))
+	var unlocked: Array = _world_state.get("unlocked_mission_ids", [])
+
+	var training_pool: Array = _mission_pool_cfg.get("training", [])
+	for entry in training_pool:
+		if typeof(entry) != TYPE_DICTIONARY:
+			continue
+
+		var auto_unlock: bool = entry.get("auto_unlock", false)
+		if not auto_unlock:
+			continue
+
+		var min_rank: int = int(entry.get("min_rank", 0))
+		var max_rank: int = int(entry.get("max_rank", 9999))
+
+		if training_rank < min_rank:
+			continue
+		if training_rank > max_rank:
+			continue
+
+		var mission_id: String = entry.get("mission_id", "")
+		if mission_id == "":
+			continue
+
+		if not unlocked.has(mission_id):
+			unlocked.append(mission_id)
+
+	_world_state["unlocked_mission_ids"] = unlocked
+
+
 func _map_intensity_to_range(intensity: float, cfg: Dictionary) -> float:
 	var min_intensity: float = float(cfg.get("min_intensity", 0.0))
 	var max_intensity: float = float(cfg.get("max_intensity", 1.0))
@@ -617,7 +741,7 @@ func _map_intensity_to_range(intensity: float, cfg: Dictionary) -> float:
 	var value: float = lerp(min_value, max_value, t)
 	return value
 
-func choose_training_mission() -> String:
+func choose_training_mission() -> Dictionary:
 	##
 	# Returns a single training mission_id chosen from the currently
 	# available training missions, as filtered by rank + unlocks.
@@ -626,17 +750,17 @@ func choose_training_mission() -> String:
 	var pool: Array = get_available_training_missions()
 	if pool.is_empty():
 		if debug_logging:
-			print("[WorldSimManager] No available training missions to choose from.")
-		return ""
+			print("[WorldSimManager] No available tutorial missions to choose from.")
+		return {}
 
-	# Simple uniform random choice for now.
 	var index: int = randi() % pool.size()
-	var mission_id = pool[index]
+	var mission_cfg: Dictionary = pool[index]
 
 	if debug_logging:
-		print("[WorldSimManager] Chose training mission: ", mission_id)
+		print("[WorldSimManager] Chose tutorial mission: ", mission_cfg.get("id", "UNKNOWN"))
 
-	return String(mission_id)
+	return mission_cfg
+
 
 func get_next_training_mission_id() -> String:
 	##
@@ -695,3 +819,133 @@ func _process_training_outcome(mission_id: String, success_state: String) -> voi
 		GameState.training_complete = true
 
 		ensure_minimum_board_missions(2) 		# Ensure the mission board starts with 2+ missions.
+
+func _pick_regular_missions_from_registry(count: int) -> Array:
+	##
+	# Picks up to `count` NON-tutorial missions from MissionRegistry
+	# that meet reputation requirements and are not already on the board.
+	# Returns Array[Dictionary].
+	##
+	var out: Array = []
+
+	if not Engine.has_singleton("MissionRegistry"):
+		push_warning("WorldSimManager: MissionRegistry singleton not found; skipping authored mission pick.")
+		return out
+
+	var all_missions: Array = MissionRegistry.get_all()
+	if all_missions.is_empty():
+		return out
+
+	# Already-available ids to avoid duplicates
+	var existing_ids: Array = []
+	for m in GameState.available_missions:
+		if typeof(m) == TYPE_DICTIONARY:
+			var mid: String = m.get("id", "")
+			if mid != "":
+				existing_ids.append(mid)
+
+	# Reputation (robust access)
+	var rep: int = 0
+	if GameState.has_method("get_reputation"):
+		rep = int(GameState.get_reputation())
+	elif GameState.has("reputation"):
+		rep = int(GameState.reputation)
+	else:
+		rep = 0
+
+	# Filter candidates
+	var candidates: Array = []
+	for m in all_missions:
+		if typeof(m) != TYPE_DICTIONARY:
+			continue
+
+		var mid: String = m.get("id", "")
+		if mid == "":
+			continue
+
+		if existing_ids.has(mid):
+			continue
+
+		# Exclude tutorial missions based on category
+		var category: String = String(m.get("category", "uncategorized"))
+		if category == "tutorial":
+			continue
+
+		# Reputation gate
+		var req_rep: int = 0
+		if m.has("reputation_required"):
+			req_rep = int(m["reputation_required"])
+
+		if rep < req_rep:
+			continue
+
+		# Expiration gate (optional)
+		if _mission_is_expired(m):
+			continue
+
+		candidates.append(m)
+
+	# Randomly sample without replacement
+	while candidates.size() > 0 and out.size() < count:
+		var idx: int = randi() % candidates.size()
+		var picked: Dictionary = candidates[idx]
+		candidates.remove_at(idx)
+
+		_stamp_first_seen_if_needed(picked)
+		out.append(picked)
+
+	return out
+
+
+
+func _mission_is_expired(mission_cfg: Dictionary) -> bool:
+	# If you haven't implemented expiration yet, this safely returns false.
+	if not mission_cfg.has("expires_in_days"):
+		return false
+
+	var expires_in = mission_cfg.get("expires_in_days", null)
+	if expires_in == null:
+		return false
+
+	var first_seen_day: int = -1
+	if mission_cfg.has("first_seen_at_day"):
+		first_seen_day = int(mission_cfg["first_seen_at_day"])
+	elif GameState.has("mission_first_seen_day_by_id"):
+		var map: Dictionary = GameState.mission_first_seen_day_by_id
+		var mid: String = mission_cfg.get("id", "")
+		if mid != "" and map.has(mid):
+			first_seen_day = int(map[mid])
+
+	if first_seen_day < 0:
+		return false
+
+	var now_day: int = 0
+	if GameState.has("day"):
+		now_day = int(GameState.day)
+
+	var deadline: int = first_seen_day + int(expires_in)
+	if now_day > deadline:
+		return true
+
+	return false
+
+
+func _stamp_first_seen_if_needed(mission_cfg: Dictionary) -> void:
+	# Best-effort stamping for expiration/new-badge later.
+	var mid: String = mission_cfg.get("id", "")
+	if mid == "":
+		return
+
+	# Stamp on mission dict
+	if not mission_cfg.has("first_seen_at_day"):
+		var now_day: int = 0
+		if GameState.has("day"):
+			now_day = int(GameState.day)
+		mission_cfg["first_seen_at_day"] = now_day
+
+	# Also stamp in GameState map if it exists
+	if GameState.has("mission_first_seen_day_by_id"):
+		var map: Dictionary = GameState.mission_first_seen_day_by_id
+		if not map.has(mid):
+			map[mid] = mission_cfg["first_seen_at_day"]
+		GameState.mission_first_seen_day_by_id = map

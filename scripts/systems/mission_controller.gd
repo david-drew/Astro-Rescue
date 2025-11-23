@@ -35,6 +35,7 @@ extends Node
 @export var orbital_view_path: NodePath = NodePath("")  # NEW!
 
 @export_category("Mission Data")
+var _mission_begun: bool = false
 @export var mission_data_dir: String = "res://data/missions"
 @export var mission_file_id: String = ""  # e.g. "training_mission_01" or "mission_01"
 
@@ -84,7 +85,9 @@ var _orbital_transition_complete: bool = false  # NEW!
 
 func _reset_mission_runtime_state() -> void:
 	# Reset per-mission runtime state so we can safely start a new mission.
-	_mission_state = "not_started"
+	_mission_begun = false
+	_mission_state = "not_started"		# TODO - these 2 vars look like dupes
+	
 	_mission_elapsed_time = 0.0
 
 	_current_fuel_ratio = 1.0
@@ -119,8 +122,7 @@ func _ready() -> void:
 	# scene flow controller (Game.gd).
 	_connect_eventbus_signals()
 
-	if terrain_generator_path != NodePath(""):
-		_terrain_generator = get_node_or_null(terrain_generator_path) as TerrainGenerator
+	_terrain_generator = null
 
 	if lander_path != NodePath(""):
 		_lander = get_node_or_null(lander_path)
@@ -137,6 +139,7 @@ func _ready() -> void:
 	if debug_logging:
 		print("[MissionController] Ready. Waiting for begin_mission() call.")
 
+	print("\tCHECK TG Path: ", terrain_generator_path)
 
 func _process(delta: float) -> void:
 	if _mission_state != "running":
@@ -173,9 +176,7 @@ func _load_mission_config() -> void:
 
 		# 2) If empty AND using real game flow → ask WorldSimManager
 		if _mission_config.is_empty():
-			var ws = null
-			if WorldSimManager:
-				ws = WorldSimManager
+			var ws = WorldSimManager.new()
 			if ws != null and ws.has_method("get_next_training_mission_id"):
 				var tid: String = ws.get_next_training_mission_id()
 				if tid != "":
@@ -286,6 +287,23 @@ func _apply_mission_terrain() -> void:
 		print("[MissionController] Applying terrain config: ", terrain_config)
 
 	_terrain_generator.generate_terrain(terrain_config)
+	
+	# Notify gravity/physics systems that terrain is ready.
+	var gravity_mgr := get_node_or_null("../GravityFieldManager")
+	if gravity_mgr != null and gravity_mgr.has_method("update_from_terrain"):
+		gravity_mgr.update_from_terrain(_terrain_generator)
+
+	# Optional global signal if other systems listen.
+	EventBus.emit_signal("terrain_generated", _terrain_generator)
+
+	# TODO DEBUG
+	print("\tgot to check MC1")
+	if _terrain_generator and _terrain_generator.has_method("get_landing_zone_ids"):
+		var ids: Array = _terrain_generator.get_landing_zone_ids()
+		print("[MissionController] Terrain zones now: ", ids)
+	elif _terrain_generator and _terrain_generator.has_method("landing_zones"):
+		print("[MissionController] Terrain zones dict keys: ", _terrain_generator.landing_zones.keys())
+
 
 func _get_terrain_tiles_controller() -> TerrainTilesController:
 	if _terrain_tiles_controller == null:
@@ -324,6 +342,9 @@ func _position_lander_from_spawn() -> void:
 	# Defaults
 	var center_x: float = 0.0
 	var surface_y: float = 600.0  # Fallback only
+
+	#if _terrain_generator == null:
+	#	_terrain_generator = get_node_or_null("/root/Game/World/TerrainGenerator")
 
 	# ----------------------------------------------------------
 	# 1) Get ACTUAL terrain surface from TerrainGenerator
@@ -512,6 +533,7 @@ func _on_time_tick(channel_id: String, dt_game: float, _dt_real: float) -> void:
 # -------------------------------------------------------------------
 
 func begin_mission() -> void:
+	print("\t....................CRAZY BEGIN MISSION RECYCLE")
 	##
 	# Start (or restart) a mission using the current GameState state.
 	##
@@ -524,6 +546,8 @@ func begin_mission() -> void:
 			print("[MissionController] begin_mission() aborted: no mission_config loaded.")
 		return
 	
+	_mission_begun = true
+
 	# NEW: Check if mission uses orbital view
 	var orbital_cfg: Dictionary = _mission_config.get("orbital_view", {})
 	_using_orbital_view = orbital_cfg.get("enabled", false)
@@ -553,6 +577,7 @@ func begin_mission() -> void:
 	_apply_mission_tiles()
 	
 	# Branch based on orbital view usage
+	# Start with OV = required to run OrbitalView
 	if _using_orbital_view and _orbital_view != null:
 		_start_with_orbital_view()
 	else:
@@ -953,49 +978,51 @@ func _apply_mission_modifiers() -> void:
 		print("[MissionController] Applying mission modifiers: ", modifiers)
 	
 	# Fuel capacity multiplier
-	if modifiers.has("fuel_capacity_multiplier"):
+	
+	if "fuel_capacity_multiplier" in modifiers:
 		var multiplier := float(modifiers.get("fuel_capacity_multiplier", 1.0))
-		if _lander.has_property("fuel_capacity"):
+		if "fuel_capacity" in _lander:
 			var base_fuel: float = _lander.get("fuel_capacity")
 			_lander.set("fuel_capacity", base_fuel * multiplier)
 			if debug_logging:
 				print("[MissionController] Fuel capacity: ", base_fuel, " -> ", base_fuel * multiplier)
 	
 	# Thrust multiplier
-	if modifiers.has("thrust_multiplier"):
+	if "thrust_multiplier" in modifiers:
 		var multiplier := float(modifiers.get("thrust_multiplier", 1.0))
-		if _lander.has_property("base_thrust_force"):
+		if "base_thrust_force" in _lander:
 			var base_thrust: float = _lander.get("base_thrust_force")
 			_lander.set("base_thrust_force", base_thrust * multiplier)
 			if debug_logging:
 				print("[MissionController] Thrust: ", base_thrust, " -> ", base_thrust * multiplier)
 	
 	# Rotation acceleration multiplier
-	if modifiers.has("rotation_accel_multiplier"):
+	if "rotation_accel_multiplier" in modifiers:
 		var multiplier := float(modifiers.get("rotation_accel_multiplier", 1.0))
-		if _lander.has_property("rotation_accel"):
+		if "rotation_accel" in _lander:
 			var base_rotation: float = _lander.get("rotation_accel")
 			_lander.set("rotation_accel", base_rotation * multiplier)
 			if debug_logging:
 				print("[MissionController] Rotation accel: ", base_rotation, " -> ", base_rotation * multiplier)
 	
 	# Max angular speed multiplier
-	if modifiers.has("max_angular_speed_multiplier"):
+	if "max_angular_speed_multiplier" in modifiers:
 		var multiplier := float(modifiers.get("max_angular_speed_multiplier", 1.0))
-		if _lander.has_property("max_angular_speed"):
+		if "max_angular_speed" in _lander:
 			var base_speed: float = _lander.get("max_angular_speed")
 			_lander.set("max_angular_speed", base_speed * multiplier)
 			if debug_logging:
 				print("[MissionController] Max angular speed: ", base_speed, " -> ", base_speed * multiplier)
 	
 	# Starting fuel ratio
-	if modifiers.has("start_fuel_ratio"):
+	if "start_fuel_ratio" in modifiers:
 		var ratio := float(modifiers.get("start_fuel_ratio", 1.0))
 		if _lander.has_method("set_fuel_ratio"):
 			_lander.call("set_fuel_ratio", ratio)
 			if debug_logging:
 				print("[MissionController] Starting fuel ratio: ", ratio)
-		elif _lander.has_property("_current_fuel") and _lander.has_property("fuel_capacity"):
+				
+		elif "_current_fuel" in _lander and "fuel_capacity" in _lander:
 			var capacity: float = _lander.get("fuel_capacity")
 			_lander.set("_current_fuel", capacity * ratio)
 			if debug_logging:
@@ -1028,7 +1055,7 @@ func _apply_mission_hud_config() -> void:
 		var show := bool(hud_config.get("show_altitude", true))
 		if _hud.has_method("set_altitude_visible"):
 			_hud.call("set_altitude_visible", show)
-		elif _hud.has_property("show_altitude"):
+		elif "show_altitude" in _hud:
 			_hud.set("show_altitude", show)
 		if debug_logging:
 			print("[MissionController] HUD altitude: ", show)
@@ -1037,7 +1064,7 @@ func _apply_mission_hud_config() -> void:
 		var show := bool(hud_config.get("show_fuel", true))
 		if _hud.has_method("set_fuel_visible"):
 			_hud.call("set_fuel_visible", show)
-		elif _hud.has_property("show_fuel"):
+		elif "show_fuel" in _hud:
 			_hud.set("show_fuel", show)
 		if debug_logging:
 			print("[MissionController] HUD fuel: ", show)
@@ -1046,7 +1073,7 @@ func _apply_mission_hud_config() -> void:
 		var show := bool(hud_config.get("show_wind", false))
 		if _hud.has_method("set_wind_visible"):
 			_hud.call("set_wind_visible", show)
-		elif _hud.has_property("show_wind"):
+		elif "show_wind" in _hud:
 			_hud.set("show_wind", show)
 		if debug_logging:
 			print("[MissionController] HUD wind: ", show)
@@ -1055,7 +1082,7 @@ func _apply_mission_hud_config() -> void:
 		var show := bool(hud_config.get("show_gravity", true))
 		if _hud.has_method("set_gravity_visible"):
 			_hud.call("set_gravity_visible", show)
-		elif _hud.has_property("show_gravity"):
+		elif "show_gravity" in _hud:
 			_hud.set("show_gravity", show)
 		if debug_logging:
 			print("[MissionController] HUD gravity: ", show)
@@ -1064,13 +1091,13 @@ func _apply_mission_hud_config() -> void:
 		var show := bool(hud_config.get("show_timer", true))
 		if _hud.has_method("set_timer_visible"):
 			_hud.call("set_timer_visible", show)
-		elif _hud.has_property("show_timer"):
+		elif "show_timer" in _hud:
 			_hud.set("show_timer", show)
 		if debug_logging:
 			print("[MissionController] HUD timer: ", show)
 	
 	# Store override permission if HUD supports it
-	if _hud.has_property("allow_player_override"):
+	if "allow_player_override" in _hud:
 		_hud.set("allow_player_override", allow_override)
 
 func _update_hud_timer() -> void:
@@ -1132,7 +1159,6 @@ func _on_orbital_transition_started() -> void:
 			print("[MissionController] Camera zooming to: ", target_pos)
 
 
-
 # ==================================================================
 # STEP 5: Add Signal Handlers for OrbitalView
 # ==================================================================
@@ -1140,7 +1166,15 @@ func _on_orbital_transition_started() -> void:
 func _on_orbital_zone_selected(zone_id: String) -> void:
 	if debug_logging:
 		print("[MissionController] Orbital zone selected: ", zone_id)
-	
+
+	# If begin_mission still couldn't load config, bail.
+	if _mission_config.is_empty():
+		push_warning("[MissionController] Cannot proceed from orbital selection; mission_config empty.")
+		return
+
+	if _terrain_generator == null and terrain_generator_path != NodePath(""):
+		_terrain_generator = get_node_or_null(terrain_generator_path) as TerrainGenerator
+
 	# Store selected zone for spawn positioning
 	if not _mission_config.has("spawn"):
 		_mission_config["spawn"] = {}
@@ -1191,6 +1225,7 @@ func _on_orbital_transition_completed() -> void:
 	# NOW start the mission and emit signal
 	_mission_state = "running"
 	
+	print("\t\t.......MISSION STARTED.................")
 	EventBus.emit_signal("mission_started", _mission_id)
 
 func _enable_gameplay_camera() -> void:
@@ -1261,7 +1296,14 @@ func _hide_landing_gameplay() -> void:
 	##
 	# Hide World node and Lander for orbital view
 	##
-	var world_node := get_node_or_null("../World")
+
+	# Ensure we are bound to the real generator/tiles before hiding.
+	if terrain_generator_path != NodePath(""):
+		_terrain_generator = get_node_or_null(terrain_generator_path) as TerrainGenerator
+	if terrain_tiles_controller_path != NodePath(""):
+		_terrain_tiles_controller = get_node_or_null(terrain_tiles_controller_path)
+
+	var world_node := get_node_or_null("/root/Game/World")
 	if world_node != null:
 		world_node.visible = false
 		if debug_logging:
@@ -1303,11 +1345,19 @@ func _show_landing_gameplay() -> void:
 	##
 	# Show World node and Lander after orbital transition
 	##
-	var world_node := get_node_or_null("../World")
+	var world_node := get_node_or_null("/root/Game/World")
 	if world_node != null:
 		world_node.visible = true
 		if debug_logging:
 			print("[MissionController] World node shown")
+	
+	var _lander:RigidBody2D = get_node_or_null("/root/Game/World/Lander")
+	if _lander != null:
+		print("\t....................WTF??!!!!!!!!!!")
+		_lander.visible = true
+		#_lander.Camera2D.enable
+	else:
+		print("\tNULL LANDA NULL.......................................")
 	
 	# Show terrain
 	if _terrain_generator != null:

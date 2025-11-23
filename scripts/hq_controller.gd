@@ -67,6 +67,10 @@ func _ready() -> void:
 		if not store_button.pressed.is_connected(Callable(self, "_on_tab_store")):
 			store_button.pressed.connect(Callable(self, "_on_tab_store"))
 
+	var wsm:Node = WorldSimManager.new()
+	wsm.refresh_board_missions_for_hq()
+	$MissionBoard.refresh()
+
 	# Default view: MissionBoard
 	#_show_mission_board()
 

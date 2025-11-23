@@ -21,6 +21,7 @@ var _current_mode: GameMode = GameMode.LAUNCH_MENU
 @onready var systems: Node            = $Systems
 @onready var mission_controller: Node = $Systems/MissionController
 @onready var world: Node2D            = $World
+@onready var orbital_view: Node2D     = $OrbitalView 
 
 @onready var ui_root: CanvasLayer     = $UI
 @onready var launch_menu: Control     = $UI/LaunchMenu
@@ -28,9 +29,8 @@ var _current_mode: GameMode = GameMode.LAUNCH_MENU
 @onready var lander_hud: Control      = $UI/LanderHUD
 
 # IMPORTANT: rename these NodePaths to your real nodes.
-@onready var briefing_panel: Control  = $UI/BriefingPanel if $UI.has_node("BriefingPanel") else null
-@onready var orbital_view: Control    = $UI/OrbitalView if $UI.has_node("OrbitalView") else null
-@onready var debrief_panel: Control   = $UI/DebriefPanel if $UI.has_node("DebriefPanel") else null
+@onready var briefing_panel: Control  = $UI/BriefingPanel 
+@onready var debrief_panel: Control   = $UI/DebriefPanel 
 
 
 func _ready() -> void:
@@ -76,9 +76,6 @@ func _connect_eventbus() -> void:
 		if not orbital_view.is_connected("zone_selected", Callable(self, "_on_orbital_zone_selected")):
 			orbital_view.connect("zone_selected", Callable(self, "_on_orbital_zone_selected"))
 
-		if not orbital_view.is_connected("dialogue_completed", Callable(self, "_on_orbital_dialogue_completed")):
-			orbital_view.connect("dialogue_completed", Callable(self, "_on_orbital_dialogue_completed"))
-
 		if not orbital_view.is_connected("transition_started", Callable(self, "_on_orbital_transition_started")):
 			orbital_view.connect("transition_started", Callable(self, "_on_orbital_transition_started"))
 
@@ -105,20 +102,15 @@ func _set_mode(new_mode: GameMode) -> void:
 
 func _apply_mode_visibility() -> void:
 	# Hide everything first, then enable exactly what we want.
-	if launch_menu:
-		launch_menu.visible = false
-	if hq_panel:
-		hq_panel.visible = false
-	if briefing_panel:
-		briefing_panel.visible = false
+	launch_menu.visible = false
+	hq_panel.visible = false
+	briefing_panel.visible = false
 	if orbital_view:
 		orbital_view.visible = false
 	if lander_hud:
 		lander_hud.visible = false
-	if debrief_panel:
-		debrief_panel.visible = false
-	if world:
-		world.visible = false
+	debrief_panel.visible = false
+	world.visible = false
 
 	if _current_mode == GameMode.LAUNCH_MENU:
 		if launch_menu:
@@ -210,6 +202,7 @@ func _on_briefing_launch_requested() -> void:
 		print("[Game] briefing_launch_requested")
 
 	if use_orbital_view and orbital_view:
+		print("Briefing2OrbitalView")		# TODO
 		_enter_orbital_view()
 	else:
 		_start_mission_from_brief_or_orbit()
@@ -232,8 +225,8 @@ func _on_orbital_zone_selected(zone_id: String) -> void:
 	if debug_logging:
 		print("[Game] orbital zone_selected: ", zone_id)
 
-	# You likely want to store this in GameState so MissionController / TerrainGenerator can use it.
-	GameState.selected_landing_zone_id = zone_id
+	# Store this in GameState so MissionController / TerrainGenerator can use it.
+	GameState.landing_zone_id = zone_id
 
 
 func _on_orbital_dialogue_completed() -> void:

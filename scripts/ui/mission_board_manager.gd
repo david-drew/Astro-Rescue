@@ -43,6 +43,9 @@ func refresh() -> void:
 	# Public entry point called by HQController when HQ becomes visible.
 	_refresh_from_gamestate()
 
+	# TODO
+	print("[MissionBoard] available_missions size = ", GameState.available_missions.size(),	
+	" training_complete=", GameState.training_complete, " training_progress=", GameState.training_progress)
 
 # -------------------------------------------------------------------
 # Internal helpers
@@ -175,6 +178,8 @@ func _on_mission_button_pressed(button: Button) -> void:
 
 	# Emit intent for Game.gd to handle briefing → orbital → mission.
 	EventBus.emit_signal("start_mission_requested", mission_id, mission_cfg)
+	GameState.current_mission_id = mission_id
+	GameState.current_mission_config = mission_cfg
 
 
 func _on_close_button_pressed() -> void:

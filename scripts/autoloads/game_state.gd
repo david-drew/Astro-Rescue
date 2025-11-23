@@ -24,6 +24,8 @@ extends Node
 
 var player_profile: Dictionary = {}
 var world_sim_state: Dictionary = {}
+var current_mission_id:String = ""
+var landing_zone_id:String = ""
 
 # Current mission (set by CareerHub / MissionBriefing / MissionGenerator)
 var current_mission_config: Dictionary = {}

@@ -1,27 +1,29 @@
 {
   "id": "training_mission_02",
   "display_name": "Training 02 – Crosswind Pad",
-  "is_training": true,
-  "tier": 1,
+  "category": "tutorial",
+  "difficulty": 1,
+  "recommended_skills": ["landing"], 
+  "expires_in_days": null, 
+  "unique": true,
+  "reputation_required": 0,
 
   "environment": {
-	"gravity_scale": 0.9,
-	"gravity": {
-	  "enabled": true,
-	  "strength": 0.9,
-	  "direction_deg": 90.0
-	},
-	"atmosphere": "thin",
-	"wind_profile_id": "gusty_crosswind_low",
-	"wind_strength_multiplier": 0.5,
-	"visibility": {
-	  "fog_type": "none",
-	  "fog_density": 0.0,
-	  "precipitation_type": "none",
-	  "precipitation_intensity": 0.0,
-	  "allow_reveal_tool": false
-	},
-	"physics_profile_id": "lunar_low_g"
+		"gravity": {
+		  "strength": 0.9,
+		  "direction_deg": 90.0
+		},
+		"atmosphere": "thin",
+		"wind_profile_id": "gusty_crosswind_low",
+		"wind_strength_multiplier": 0.5,
+		"visibility": {
+		  "fog_type": "none",
+		  "fog_density": 0.0,
+		  "precipitation_type": "none",
+		  "precipitation_intensity": 0.0,
+		  "allow_reveal_tool": false
+		},
+		"physics_profile_id": "lunar_low_g"
   },
 
   "terrain": {

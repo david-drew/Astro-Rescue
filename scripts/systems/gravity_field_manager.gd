@@ -51,10 +51,16 @@ func _ready() -> void:
 	_global_gravity_base = Vector2.DOWN * base_surface_gravity
 	
 	# Listen for environment gravity changes
-	if EventBus and EventBus.has_signal("gravity_changed"):
+	if EventBus.has_signal("gravity_changed"):
 		if not EventBus.is_connected("gravity_changed", Callable(self, "_on_environment_gravity_changed")):
 			EventBus.connect("gravity_changed", Callable(self, "_on_environment_gravity_changed"))
+
+	if EventBus.has_signal("terrain_generated"):
+		EventBus.terrain_generated.connect(_on_terrain_generated)
+
+	return		# TODO - might break things, but this stops early generation
 	
+	# TODO delete?: 
 	# Try to find terrain surface if auto-update is enabled
 	if auto_update_surface:
 		call_deferred("_find_terrain_surface")
@@ -184,6 +190,9 @@ func _calculate_gravity_ratio(altitude: float) -> float:
 	var ratio: float = lerp(1.0, min_gravity_ratio, curve_t)
 	
 	return ratio
+
+func _on_terrain_generated(tg: TerrainGenerator) -> void:
+	update_from_terrain(tg)
 
 func _on_environment_gravity_changed(gravity_vector: Vector2) -> void:
 	"""Handle gravity updates from EnvironmentController"""

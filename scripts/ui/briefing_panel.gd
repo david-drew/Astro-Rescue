@@ -32,7 +32,7 @@ var mission_config: Dictionary = {}
 
 
 func _ready() -> void:
-	visible = false
+	#visible = false
 
 	if launch_button != null:
 		if not launch_button.pressed.is_connected(Callable(self, "_on_launch_pressed")):
@@ -48,15 +48,9 @@ func populate_from_gamestate() -> void:
 	# Preferred entrypoint.
 	# Called by Game.gd when entering BRIEFING state.
 	##
-
-	if not Engine.has_singleton("GameState"):
-		if debug_logging:
-			print("[BriefingPanel] GameState not found; cannot populate.")
-		visible = false
-		return
-
 	var cfg: Dictionary = GameState.current_mission_config
 	if cfg.is_empty():
+		print("[BriefingPanel] No current_mission_config; hiding panel.")
 		if debug_logging:
 			print("[BriefingPanel] No current_mission_config; hiding panel.")
 		visible = false

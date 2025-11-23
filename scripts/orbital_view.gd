@@ -20,7 +20,6 @@ class_name OrbitalView
 ##
 
 signal zone_selected(zone_id: String)
-signal dialogue_completed
 signal transition_started
 signal transition_completed
 
@@ -31,11 +30,9 @@ signal transition_completed
 @export_category("Scene References")
 @export var planet_renderer_path: NodePath
 @export var orbital_camera_path: NodePath
-@export var dialogue_panel_path: NodePath  # Optional: reuse existing DialoguePanel
 
 @export_category("Debug")
 @export var debug_logging: bool = true
-@export var skip_dialogue: bool = false  # For testing
 @export var auto_select_first_zone: bool = false  # For testing
 
 # -------------------------------------------------------------------
@@ -45,7 +42,6 @@ signal transition_completed
 var _config: Dictionary = {}  # The orbital_view config from mission JSON
 var _planet_renderer: Node2D = null
 var _orbital_camera: Camera2D = null
-var _dialogue_panel: Control = null
 
 var _landing_zones: Array = []  # Array of zone config dictionaries
 var _zone_markers: Array = []  # Array of LandingZoneMarker nodes
@@ -56,22 +52,22 @@ var _lander_orbit_angle: float = 0.0
 var _lander_orbit_radius: float = 450.0
 var _lander_orbit_speed: float = 0.8
 
-var _dialogue_queue: Array = []
-var _current_dialogue_index: int = 0
-var _is_showing_dialogue: bool = false
-var _dialogue_blocked: bool = true  # Block zone selection until dialogue done
-
 var _planet_center: Vector2 = Vector2.ZERO
 var _planet_radius: float = 320.0
 
+var _prompt_layer: CanvasLayer = null
+var _prompt_panel: PanelContainer = null
+var _prompt_timer: Timer = null
+var _pick_prompt_shown: bool = false			# Blocks popup message when scene transitions
+
+
 # Orbital view is positioned FAR from gameplay area
-const ORBITAL_VIEW_OFFSET: Vector2 = Vector2(-50000, -50000)
+#const ORBITAL_VIEW_OFFSET: Vector2 = Vector2(-50000, -50000)
 
 # State machine
 enum State {
 	HIDDEN,
 	INITIALIZING,
-	SHOWING_DIALOGUE,
 	WAITING_FOR_SELECTION,
 	TRANSITIONING,
 	COMPLETED
@@ -91,8 +87,6 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	match _state:
-		State.SHOWING_DIALOGUE:
-			_update_dialogue(delta)
 		State.WAITING_FOR_SELECTION:
 			_update_orbit_animation(delta)
 		State.TRANSITIONING:
@@ -117,10 +111,6 @@ func _update_orbit_animation(delta: float) -> void:
 	
 	# Rotate sprite to face tangent to orbit (looks like it's moving)
 	_lander_sprite.rotation = _lander_orbit_angle + PI / 2.0
-
-func _update_dialogue(delta: float) -> void:
-	# Dialogue system update (if using custom dialogue)
-	pass
 
 # -------------------------------------------------------------------
 # Public API
@@ -162,16 +152,14 @@ func show_orbital_view() -> void:
 	# 2. Enable zone selection
 	##
 	visible = true
+	_state = State.WAITING_FOR_SELECTION
+	_show_pick_zone_prompt()
+
 	set_process(true)
 	
 	# Enable orbital camera so we see this view, not gameplay
 	if _orbital_camera != null:
 		_orbital_camera.enabled = true
-	
-	if skip_dialogue or _dialogue_queue.is_empty():
-		_skip_to_selection()
-	else:
-		_start_dialogue()
 	
 	if debug_logging:
 		print("[OrbitalView] Showing orbital view, camera enabled")
@@ -180,16 +168,17 @@ func hide_orbital_view() -> void:
 	##
 	# Hide the orbital view (called after transition to landing)
 	##
-	visible = false
-	set_process(false)
-	_state = State.HIDDEN
-	
+
 	# Disable orbital camera so gameplay camera takes over
 	if _orbital_camera != null:
 		_orbital_camera.enabled = false
 	
 	if debug_logging:
 		print("[OrbitalView] Hidden, camera disabled")
+	
+	visible = false
+	set_process(false)
+	_state = State.HIDDEN
 
 func begin_zoom_to_position(target_world_position: Vector2) -> void:
 	##
@@ -238,7 +227,7 @@ func _parse_config() -> void:
 	# Planet visual settings
 	var planet_cfg: Dictionary = _config.get("planet_visual", {})
 	_planet_radius = float(planet_cfg.get("radius", 320.0))
-	_planet_center = ORBITAL_VIEW_OFFSET  # Far from gameplay area
+	_planet_center = Vector2.ZERO 				# ORBITAL_VIEW_OFFSET  # Far from gameplay area
 	
 	# Lander orbit settings
 	var lander_cfg: Dictionary = _config.get("lander_orbit", {})
@@ -247,9 +236,7 @@ func _parse_config() -> void:
 	
 	# Landing zones
 	_landing_zones = _config.get("landing_zones", [])
-	
-	# Dialogue
-	_dialogue_queue = _config.get("dialogue", [])
+
 
 # -------------------------------------------------------------------
 # Visual Creation
@@ -310,24 +297,28 @@ func _create_lander_sprite() -> void:
 	_lander_sprite.name = "OrbitingLander"
 	add_child(_lander_sprite)
 	
-	# Create simple lander visual (triangle pointing right)
-	var lander_image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
-	lander_image.fill(Color.TRANSPARENT)
+	var lander_image:Image = Image.new()
+	var err = lander_image.load("res://assets/images/rocket_prime_01.png")
 	
-	# Draw triangle (simplified lander shape)
-	var white := Color.WHITE
-	for x in range(16, 28):
-		var y_offset := int((x - 16) * 0.6)
-		for y in range(16 - y_offset, 16 + y_offset + 1):
-			if y >= 0 and y < 32:
-				lander_image.set_pixel(x, y, white)
+	if err != OK:
+		# Create simple lander visual (triangle pointing right)
+		lander_image = Image.create(32, 32, false, Image.FORMAT_RGBA8)
+		lander_image.fill(Color.TRANSPARENT)
+	
+		# Draw triangle (simplified lander shape)
+		var white := Color.WHITE
+		for x in range(16, 28):
+			var y_offset := int((x - 16) * 0.6)
+			for y in range(16 - y_offset, 16 + y_offset + 1):
+				if y >= 0 and y < 32:
+					lander_image.set_pixel(x, y, white)
 	
 	var lander_texture := ImageTexture.create_from_image(lander_image)
 	_lander_sprite.texture = lander_texture
 	_lander_sprite.centered = true
-	
-	# Start at top of orbit
-	_lander_orbit_angle = -PI / 2.0
+
+	_lander_orbit_angle = -PI / 2.0		# Start at top of orbit
+	_update_orbit_animation(0.0)		# Make sure orbit is immediate (otherwise sits in planet center for several seconds)
 	
 	if debug_logging:
 		print("[OrbitalView] Lander sprite created")
@@ -421,71 +412,10 @@ func _create_marker_visual(difficulty: String, color: Color) -> Node2D:
 	return visual
 
 # -------------------------------------------------------------------
-# Dialogue System
-# -------------------------------------------------------------------
-
-func _start_dialogue() -> void:
-	_state = State.SHOWING_DIALOGUE
-	_is_showing_dialogue = true
-	_current_dialogue_index = 0
-	_dialogue_blocked = true
-	
-	_show_next_dialogue_line()
-	
-	if debug_logging:
-		print("[OrbitalView] Starting dialogue (", _dialogue_queue.size(), " lines)")
-
-func _show_next_dialogue_line() -> void:
-	if _current_dialogue_index >= _dialogue_queue.size():
-		_finish_dialogue()
-		return
-	
-	var line: Dictionary = _dialogue_queue[_current_dialogue_index]
-	var speaker: String = line.get("speaker", "")
-	var text: String = line.get("text", "")
-	
-	# TODO: Display in dialogue panel
-	# For now, just print
-	if debug_logging:
-		print("[OrbitalView] Dialogue [", speaker, "]: ", text)
-	
-	# Auto-advance after delay (or wait for player input)
-	await get_tree().create_timer(3.0).timeout
-	_current_dialogue_index += 1
-	_show_next_dialogue_line()
-
-func _finish_dialogue() -> void:
-	_is_showing_dialogue = false
-	_dialogue_blocked = false
-	_state = State.WAITING_FOR_SELECTION
-	dialogue_completed.emit()
-	
-	if debug_logging:
-		print("[OrbitalView] Dialogue complete. Waiting for zone selection.")
-	
-	if auto_select_first_zone and _landing_zones.size() > 0:
-		_select_zone(_landing_zones[0].get("id", ""))
-
-func _skip_to_selection() -> void:
-	_dialogue_blocked = false
-	_state = State.WAITING_FOR_SELECTION
-	
-	if debug_logging:
-		print("[OrbitalView] Skipped to zone selection")
-	
-	if auto_select_first_zone and _landing_zones.size() > 0:
-		_select_zone(_landing_zones[0].get("id", ""))
-
-# -------------------------------------------------------------------
 # Zone Selection
 # -------------------------------------------------------------------
 
 func _on_marker_clicked(viewport: Node, event: InputEvent, shape_idx: int, zone_id: String) -> void:
-	if _dialogue_blocked:
-		if debug_logging:
-			print("[OrbitalView] Zone click blocked (dialogue active)")
-		return
-	
 	if event is InputEventMouseButton:
 		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			_select_zone(zone_id)
@@ -539,7 +469,81 @@ func _setup_camera() -> void:
 
 func _complete_transition() -> void:
 	_state = State.COMPLETED
+	_activate_lander_camera()
 	transition_completed.emit()
 	
 	if debug_logging:
 		print("[OrbitalView] Transition complete")
+
+
+# -------------------------------------------------------------------
+# Simple Pick-Zone Prompt (Dialogue Popup)
+# -------------------------------------------------------------------
+
+func _show_pick_zone_prompt() -> void:
+	if _pick_prompt_shown:
+		return
+	_pick_prompt_shown = true
+	
+	if _prompt_layer == null:
+		_prompt_layer = CanvasLayer.new()
+		_prompt_layer.layer = 50
+		add_child(_prompt_layer)
+
+	if _prompt_panel == null:
+		_prompt_panel = PanelContainer.new()
+		_prompt_panel.name = "PickZonePrompt"
+		_prompt_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_prompt_panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
+		_prompt_panel.offset_top = 20
+		_prompt_panel.offset_bottom = 120		# border size
+
+		var label := Label.new()
+		label.text = "Pick a landing zone"
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		
+		label.add_theme_font_size_override("font_size", 48) 			 # default ~24, so 48 = 2×
+		
+		_prompt_panel.add_child(label)
+
+		_prompt_layer.add_child(_prompt_panel)
+
+	if _prompt_timer == null:
+		_prompt_timer = Timer.new()
+		_prompt_timer.one_shot = true
+		_prompt_timer.wait_time = 5.0
+		_prompt_timer.timeout.connect(_hide_pick_zone_prompt)
+		add_child(_prompt_timer)
+
+	_prompt_panel.visible = true
+	_prompt_timer.start()
+
+
+func _hide_pick_zone_prompt() -> void:
+	if _prompt_panel != null:
+		_prompt_panel.visible = false
+
+func _activate_lander_camera() -> void:
+	# 1. Disable OrbitalView camera if it exists
+	$OrbitalCamera.enabled = false
+
+	print("\t................Activating Lander CAM.............................")		# TODO DEBUG
+
+	# 2. Enable the Lander’s camera
+	#var _woild = get_node_or_null("/root/Game/World")
+	var _lander = get_node_or_null("/root/Game/World/Lander")
+	if _lander:
+		var lander_cam := _lander.get_node_or_null("Camera2D")
+		if lander_cam:
+			print("\t...........Got Lander and Cam!!!!............")
+			lander_cam.enabled = true
+			lander_cam.make_current()
+			#_woild.visible = true
+			#_lander.visible = true
+		else:
+			push_warning("[MissionController] LanderCamera not found under Lander.")
+	else:
+		push_warning("[MissionController] Lander not ready; cannot activate lander camera.")

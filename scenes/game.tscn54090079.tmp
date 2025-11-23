@@ -36,7 +36,7 @@ script = ExtResource("1_yqjtg")
 
 [node name="MissionController" type="Node" parent="Systems"]
 script = ExtResource("2_iywne")
-terrain_generator_path = NodePath("../../World/TerrainGenerator")
+terrain_generator_path = NodePath("../TerrainGenerator")
 terrain_tiles_controller_path = NodePath("../TerrainTilesController")
 lander_path = NodePath("../../World/Lander")
 hud_path = NodePath("../../UI/LanderHUD")
@@ -55,6 +55,12 @@ base_default_gravity = 30.0
 wind_controller_path = NodePath("../WeatherController")
 
 [node name="WeatherController" type="Node" parent="Systems"]
+
+[node name="TerrainGenerator" type="Node" parent="Systems"]
+script = ExtResource("5_u5sy4")
+terrain_root_path = NodePath("../../World/TerrainRoot")
+terrain_color = Color(0.7080334, 0.83904666, 0.9662736, 1)
+debug_logging = true
 
 [node name="WorldSimManager" type="Node" parent="Systems"]
 script = ExtResource("7_kvpfn")
@@ -106,19 +112,18 @@ star_count = 200
 color_jitter = 0.18
 allow_twinkle = true
 
-[node name="TerrainGenerator" type="Node2D" parent="World"]
+[node name="TerrainRoot" type="Node2D" parent="World"]
 script = ExtResource("5_u5sy4")
 terrain_root_path = NodePath(".")
 terrain_color = Color(0.5788521, 0.66061723, 0.78350806, 1)
-debug_logging = true
 
-[node name="BGTiles" type="TileMapLayer" parent="World/TerrainGenerator"]
+[node name="BGTiles" type="TileMapLayer" parent="World/TerrainRoot"]
 z_index = -10
 
-[node name="SurfaceTiles" type="TileMapLayer" parent="World/TerrainGenerator"]
+[node name="SurfaceTiles" type="TileMapLayer" parent="World/TerrainRoot"]
 z_index = 1
 
-[node name="LandingDecoTiles" type="TileMapLayer" parent="World/TerrainGenerator"]
+[node name="LandingDecoTiles" type="TileMapLayer" parent="World/TerrainRoot"]
 z_index = 2
 
 [node name="Lander" parent="World" instance=ExtResource("9_kvuet")]

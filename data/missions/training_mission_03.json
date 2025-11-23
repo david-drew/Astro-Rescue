@@ -1,27 +1,30 @@
 {
   "id": "training_mission_03",
   "display_name": "Training 03 – Precision Setdown",
-  "is_training": true,
-  "tier": 2,
+  "category": "tutorial",
+  "difficulty": 1,
+  "recommended_skills": ["landing"],
+  "expires_in_days": null, 
+  "unique": true,
+  "reputation_required": 0,
 
   "environment": {
-	"gravity_scale": 1.0,
-	"gravity": {
-	  "enabled": true,
-	  "strength": 0.5,
-	  "direction_deg": 90.0
-	},
-	"atmosphere": "thin",
-	"wind_profile_id": "gusty_crosswind_low",
-	"wind_strength_multiplier": 1.0,
-	"visibility": {
-	  "fog_type": "none",
-	  "fog_density": 0.0,
-	  "precipitation_type": "none",
-	  "precipitation_intensity": 0.0,
-	  "allow_reveal_tool": false
-	},
-	"physics_profile_id": "lunar_low_g"
+		"gravity": {
+		  "enabled": true,
+		  "strength": 0.5,
+		  "direction_deg": 90.0
+		},
+		"atmosphere": "thin",
+		"wind_profile_id": "gusty_crosswind_low",
+		"wind_strength_multiplier": 1.0,
+		"visibility": {
+		  "fog_type": "none",
+		  "fog_density": 0.0,
+		  "precipitation_type": "none",
+		  "precipitation_intensity": 0.0,
+		  "allow_reveal_tool": false
+		},
+		"physics_profile_id": "lunar_low_g"
   },
 
   "terrain": {

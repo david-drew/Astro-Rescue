@@ -63,12 +63,11 @@ signal career_terminated(reason: String)
 # -------------------------------------------------------------------
 # Unlocks & Progression
 # -------------------------------------------------------------------
-
 signal lander_unlocked(lander_id: String)	# new lander unlocked.
 signal crew_unlocked(crew_id: String)		# new crew member unlocked.
 signal mission_tag_unlocked(tag: String)	# new mission tag is unlocked (gates archetypes/arcs).
 
-
+signal terrain_generated(terrain_generator:TerrainGenerator)
 
 # -------------------------------------------------------------------
 # Mission lifecycle (config, runtime, results)
