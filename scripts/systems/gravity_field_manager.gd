@@ -35,18 +35,24 @@ class_name GravityFieldManager
 @export var debug_draw_gradient: bool = false   # Visual debug of gravity zones
 
 # -------------------------------------------------------------------
+# Gravity Model Constants
+# -------------------------------------------------------------------
+# These define the *shape* of the gravity curve.
+# Reasonable defaults for large-altitude, long-descent gameplay.
+
+@export_category("Gravity Falloff Settings")
+@export var gravity_softening: float = 8000.0        	# Tunable per mission/difficulty
+@export var gravity_strength_mult: float = 1.0       	# For global or difficulty scaling
+@export var target_orbital_gravity_ratio: float = 0.05  # ~5% at orbital height
+
+# -------------------------------------------------------------------
 # Internal state
 # -------------------------------------------------------------------
-
 var _global_gravity_base: Vector2 = Vector2.ZERO  # Base gravity vector from environment
 var _cached_terrain_surface_y: float = 0.0
 var _surface_found: bool = false
+var _surface_g: float = 0.0
 
-# -------------------------------------------------------------------
-# Gravity Model Constants (production safe)
-# -------------------------------------------------------------------
-const GRAVITY_SOFTENING: float = 3000.0   # tune later
-const GRAVITY_STRENGTH_MULT: float = 1.0  # multiplier for surface gravity
 
 # -------------------------------------------------------------------
 # Lifecycle
@@ -120,31 +126,36 @@ func set_global_gravity(gravity: Vector2) -> void:
 	if debug_logging:
 		print("[GravityFieldManager] Base gravity set to: ", gravity)
 
+
 func get_gravity_at_position(global_position: Vector2) -> Vector2:
 	# Compute altitude above surface
 	var altitude := surface_y_position - global_position.y
 	if altitude < 0.0:
 		altitude = 0.0
 
-	# Combine exported surface gravity with constant tuning multiplier
-	var surface_g := base_surface_gravity * GRAVITY_STRENGTH_MULT
+	# Combine exported surface gravity with difficulty/global multiplier
+	var surface_g := base_surface_gravity * gravity_strength_mult
 
-	# Softened inverse-square gravity model
-	var effective_dist := altitude + GRAVITY_SOFTENING
-	var strength := surface_g * (GRAVITY_SOFTENING * GRAVITY_SOFTENING) / (effective_dist * effective_dist)
+	# Effective softened distance
+	var S := gravity_softening
+	var effective_dist := altitude + S
+
+	# Softened inverse-square model:
+	# g(h) = g0 * (S^2) / (h+S)^2
+	var strength := surface_g * (S * S) / (effective_dist * effective_dist)
 
 	# Downward gravity vector
 	var scaled_gravity := Vector2.DOWN * strength
 
-	# Optional debug logging
+	# Debug (once per second)
 	if debug_logging and Engine.get_physics_frames() % 60 == 0:
 		print("[GFM] pos=", global_position,
 			" alt=", altitude,
-			" strength=", strength,
-			" grav=", scaled_gravity)
+			" g_surface=", surface_g,
+			" g_strength=", strength,
+			" vector=", scaled_gravity)
 
 	return scaled_gravity
-
 
 
 func set_surface_position(y_position: float) -> void:
@@ -308,3 +319,6 @@ func get_gravity_ratio_at_position(global_position: Vector2) -> float:
 	"""Get the gravity strength ratio (0.0 to 1.0) at a position"""
 	var altitude = get_altitude_from_position(global_position)
 	return _calculate_gravity_ratio(altitude)
+
+func _on_gravity_changed(gravity_vec: Vector2) -> void:
+	_surface_g = gravity_vec.length()
