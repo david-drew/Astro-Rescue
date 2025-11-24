@@ -76,16 +76,22 @@
   },
 
   "objectives": {
-		"primary": [
-			  {
-				"id": "land_safely_anywhere",
-				"description": "Perform a safe landing anywhere on the surface.",
-				"type": "landing",
-				"target_zone_id": "any",
-				"max_impact_speed": 14.0
-			  }
-		],
-		"bonus": []
+                "primary": [
+                          {
+                                "id": "land_safely_anywhere",
+                                "description": "Perform a safe landing anywhere on the surface.",
+                                "type": "landing",
+                                "target_zone_id": "any",
+                                "max_impact_speed": 14.0
+                          },
+          {
+                "id": "return_to_orbit_after_landing",
+                "description": "Climb back to orbit after completing your landing.",
+                "type": "return_to_orbit",
+                "min_altitude": 12000.0
+          }
+        ],
+        "bonus": []
   },
 
   "rewards": {

@@ -68,6 +68,7 @@ var _max_hull_damage_ratio: float = 0.0
 var _crashes_count: int = 0
 var _player_died: bool = false
 var _lander_destroyed: bool = false
+var _landing_successful: bool = false
 
 var _orbit_reached: bool = false
 var _orbit_reached_altitude: float = 0.0
@@ -96,10 +97,11 @@ func _reset_mission_runtime_state() -> void:
 	_mission_elapsed_time = 0.0
 
 	_current_fuel_ratio = 1.0
-	_max_hull_damage_ratio = 0.0
-	_crashes_count = 0
-	_player_died = false
-	_lander_destroyed = false
+        _max_hull_damage_ratio = 0.0
+        _crashes_count = 0
+        _player_died = false
+        _lander_destroyed = false
+        _landing_successful = false
 
 	_orbit_reached = false
 	_orbit_reached_altitude = 0.0
@@ -437,8 +439,11 @@ func _connect_eventbus_signals() -> void:
 	if not eb.is_connected("lander_destroyed", Callable(self, "_on_lander_destroyed")):
 		eb.connect("lander_destroyed", Callable(self, "_on_lander_destroyed"))
 
-	if not eb.is_connected("fuel_changed", Callable(self, "_on_fuel_changed")):
-		eb.connect("fuel_changed", Callable(self, "_on_fuel_changed"))
+        if not eb.is_connected("fuel_changed", Callable(self, "_on_fuel_changed")):
+                eb.connect("fuel_changed", Callable(self, "_on_fuel_changed"))
+
+        if eb.has_signal("lander_altitude_changed") and not eb.is_connected("lander_altitude_changed", Callable(self, "_on_lander_altitude_changed")):
+                eb.connect("lander_altitude_changed", Callable(self, "_on_lander_altitude_changed"))
 
 	if not eb.is_connected("player_died", Callable(self, "_on_player_died")):
 		eb.connect("player_died", Callable(self, "_on_player_died"))
@@ -599,13 +604,13 @@ func _on_landing(zone_info: Dictionary) -> void:
 	_on_touchdown(zone_info)
 
 func _on_touchdown(touchdown_data: Dictionary) -> void:
-	if _mission_state != "running":
-		return
+        if _mission_state != "running":
+                return
 
-	var success: bool = bool(touchdown_data.get("successful", false))
-	var impact_data: Dictionary = touchdown_data.get("impact_data", {})
-	if impact_data.is_empty():
-		return
+        var success: bool = bool(touchdown_data.get("successful", touchdown_data.get("success", false)))
+        var impact_data: Dictionary = touchdown_data.get("impact_data", touchdown_data)
+        if impact_data.is_empty():
+                return
 
 	if debug_logging:
 		print("[MissionController] Touchdown event received: success=", success, " impact_data=", impact_data)
@@ -615,12 +620,15 @@ func _on_touchdown(touchdown_data: Dictionary) -> void:
 	if hull_damage_ratio > _max_hull_damage_ratio:
 		_max_hull_damage_ratio = hull_damage_ratio
 
-	if not success:
-		_crashes_count += 1
+        if not success:
+                _crashes_count += 1
+        else:
+                _landing_successful = true
 
-	# Evaluate any precision landing objectives.
-	_evaluate_precision_landing_objectives(impact_data)
-	_evaluate_landing_accuracy_objectives(impact_data)
+        _evaluate_landing_objectives(impact_data, success)
+        # Evaluate any precision landing objectives.
+        _evaluate_precision_landing_objectives(impact_data)
+        _evaluate_landing_accuracy_objectives(impact_data)
 
 	# After touchdown: check if objectives are satisfied, and auto-end if configured.
 	_check_for_mission_completion()
@@ -639,10 +647,25 @@ func _on_lander_destroyed(cause:String, context:Dictionary) -> void:
 
 
 func _on_fuel_changed(current_ratio: float) -> void:
-	if _mission_state != "running":
-		return
+        if _mission_state != "running":
+                return
 
-	_current_fuel_ratio = clamp(current_ratio, 0.0, 1.0)
+        _current_fuel_ratio = clamp(current_ratio, 0.0, 1.0)
+
+func _on_lander_altitude_changed(altitude_meters: float) -> void:
+        if _mission_state != "running":
+                return
+
+        # Only consider return-to-orbit after a successful landing.
+        if _orbit_reached or not _landing_successful:
+                return
+
+        var required_altitude: float = _get_return_to_orbit_min_altitude()
+
+        if altitude_meters >= required_altitude:
+                notify_orbit_reached(altitude_meters)
+                _evaluate_return_to_orbit_objectives()
+                _check_for_mission_completion()
 
 
 func _on_player_died() -> void:
@@ -673,9 +696,64 @@ func _on_mission_timer_timeout() -> void:
 # Objective evaluation
 # -------------------------------------------------------------------
 
+func _get_obj_param(obj: Dictionary, key: String, default_value):
+        var params: Dictionary = obj.get("params", {})
+        if params.has(key):
+                return params.get(key, default_value)
+        return obj.get(key, default_value)
+
+func _get_return_to_orbit_min_altitude() -> float:
+        var min_altitude: float = 0.0
+        for obj in _primary_objectives:
+                if obj.get("type", "") != "return_to_orbit":
+                        continue
+
+                var candidate: float = float(_get_obj_param(obj, "min_altitude", 0.0))
+                if candidate > 0.0 and (min_altitude <= 0.0 or candidate < min_altitude):
+                        min_altitude = candidate
+
+        # If no explicit return-to-orbit altitude was set on objectives, fall back to the
+        # mission's spawn height, which represents the orbital insertion altitude.
+        if min_altitude <= 0.0:
+                var spawn_cfg: Dictionary = _mission_config.get("spawn", {})
+                var spawn_height: float = float(spawn_cfg.get("height_above_surface", 0.0))
+                if spawn_height > 0.0:
+                        min_altitude = spawn_height
+
+        # Final fallback: ensure orbit requires a meaningful climb.
+        if min_altitude <= 0.0:
+                min_altitude = 10000.0
+
+        return min_altitude
+
+func _evaluate_landing_objectives(impact_data: Dictionary, success: bool) -> void:
+        for obj in _primary_objectives:
+                if obj.get("type", "") != "landing":
+                        continue
+                if obj.get("status", "pending") != "pending":
+                        continue
+
+                if not success:
+                        continue
+
+                var target_zone_id: String = _get_obj_param(obj, "target_zone_id", "")
+                var landing_zone_id: String = impact_data.get("landing_zone_id", "")
+                if target_zone_id != "" and target_zone_id != "any" and landing_zone_id != target_zone_id:
+                        continue
+
+                var max_speed: float = float(_get_obj_param(obj, "max_impact_speed", 0.0))
+                var impact_speed: float = float(impact_data.get("impact_speed", 0.0))
+                if max_speed > 0.0 and impact_speed > max_speed:
+                        continue
+
+                obj["status"] = "completed"
+                _landing_successful = true
+                if debug_logging:
+                        print("[MissionController] Objective completed: landing id=", obj.get("id", ""))
+
 func _evaluate_precision_landing_objectives(impact_data: Dictionary) -> void:
-	for obj in _primary_objectives:
-		if obj.get("type", "") != "precision_landing":
+        for obj in _primary_objectives:
+                if obj.get("type", "") != "precision_landing":
 			continue
 		if obj.get("status", "pending") != "pending":
 			continue

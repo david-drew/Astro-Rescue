@@ -77,16 +77,22 @@
   },
 
   "objectives": {
-	"primary": [
-	  {
-		"id": "land_safely_in_zone",
-		"description": "Land safely in the smaller training pad.",
-		"type": "landing",
-		"target_zone_id": "training_zone_03_main",
-		"max_impact_speed": 10.0
-	  }
-	],
-	"bonus": []
+        "primary": [
+          {
+                "id": "land_safely_in_zone",
+                "description": "Land safely in the smaller training pad.",
+                "type": "landing",
+                "target_zone_id": "training_zone_03_main",
+                "max_impact_speed": 10.0
+          },
+          {
+                "id": "return_to_orbit_after_landing",
+                "description": "Return to orbit once your landing is complete.",
+                "type": "return_to_orbit",
+                "min_altitude": 11000.0
+          }
+        ],
+        "bonus": []
   },
 
   "rewards": {
