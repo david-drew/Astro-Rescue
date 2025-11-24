@@ -469,9 +469,12 @@ func _on_time_tick(channel_id: String, dt_game: float, _dt_real: float) -> void:
 
 #func begin_mission() -> void:
 func prepare_mission() -> void:
-	print("\t....................CRAZY BEGIN MISSION RECYCLE")
 	##
 	# Start (or restart) a mission using the current GameState state.
+	# 1. Prepare Mission 			- we prep but don't fully start
+	# 2. start_orbital_view() 		- select landing zone from orbit 
+	#									- calls start_landing_gameplay() when done
+	# 3. start_landing_gameplay()	- activate mission (mission is running)
 	##
 	if _mission_prepared:
 		if debug_logging:
@@ -484,7 +487,7 @@ func prepare_mission() -> void:
 	# If config failed to load, abort gracefully.
 	if _mission_config.is_empty():
 		if debug_logging:
-			print("[MissionController] begin_mission() aborted: no mission_config loaded.")
+			print("[MissionController] prepare_mission() aborted: no mission_config loaded.")
 		return
 	
 	# NEW: Check if mission uses orbital view
@@ -492,7 +495,7 @@ func prepare_mission() -> void:
 	_using_orbital_view = orbital_cfg.get("enabled", false)
 	
 	if debug_logging:
-		print("[MissionController] Mission started: ", _mission_id)
+		print("[MissionController] Mission prepped: ", _mission_id)
 		print("[MissionController] Using orbital view: ", _using_orbital_view)
 	
 	# DON'T set mission_state or emit signal yet if using orbital view!
@@ -524,21 +527,19 @@ func prepare_mission() -> void:
 	if _using_orbital_view and _orbital_view != null:
 		_start_with_orbital_view()
 	else:
-		#_start_without_orbital_view()
 		start_landing_gameplay()
 
 func start_landing_gameplay() -> void:
-	print("\t..............MC START LANDING...............")
 	# Phase B: reveal terrain + spawn/position lander + activate camera.
 	if not _mission_prepared:
 		push_warning("[MC] Cannot start landing; mission not prepared.")
 		return	
-	print("\t..............MC START LANDING 2...............")
+
 	if _mission_begun:
 		if debug_logging:
 			print("[MC] start_landing_gameplay() ignored; already begun.")
 		return
-	print("\t..............MC START LANDING 3...............")
+
 	_show_landing_gameplay()
 
 	# Ensure lander ref is current (Systems nodes can't trust _ready-time binding).
@@ -546,16 +547,10 @@ func start_landing_gameplay() -> void:
 	if _lander == null:
 		push_warning("[MissionController] start_landing_gameplay(): lander is null.")
 		return
-	else:
-		print("\t.................LANDER IS NULL")
-
 
 	# Let the lander reset itself and apply loadout/mission config.
 	if _lander.has_method("apply_mission_modifiers"):
-		print("Apply Mission Mods")
 		_lander.apply_mission_modifiers(_mission_config)
-	else:
-		print("NOOOOOOOOOOOOOO Apply Mission Mods")
 
 	if _chosen_zone_id != "":
 		_position_lander_from_spawn(_chosen_zone_id)
@@ -583,6 +578,8 @@ func notify_orbit_reached(altitude: float) -> void:
 	if debug_logging:
 		print("[MissionController] Orbit reached at altitude=", altitude, " time=", _orbit_reached_time)
 
+	EventBus.emit_signal("orbit_reached")
+
 
 func abort_mission(reason: String = "aborted") -> void:
 	if _mission_state != "running":
@@ -602,7 +599,6 @@ func _on_landing(zone_info: Dictionary) -> void:
 	_on_touchdown(zone_info)
 
 func _on_touchdown(touchdown_data: Dictionary) -> void:
-	print("TOUCHDOWN!!")
 	if _mission_state != "running":
 		return
 

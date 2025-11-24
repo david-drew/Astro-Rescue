@@ -108,6 +108,7 @@ signal time_tick(channel_id: String, dt_game: float, dt_real: float)
 # -------------------------------------------------------------------
 signal lander_entered_landing_zone(zone_id: String, zone_info: Dictionary)
 signal lander_exited_landing_zone(zone_id: String, zone_info: Dictionary)
+signal orbit_reached()
 
 ## Emitted on touchdown attempt; success indicates a safe landing according to current thresholds.
 signal touchdown(success: bool, impact_data: Dictionary)

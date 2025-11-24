@@ -20,7 +20,7 @@ class_name LanderController
 
 @export_category("Thrust")
 @export var base_thrust_force: float = 200.0  			# 700 - Reduced from 600 for better feel
-@export var turbo_thrust_multiplier: float = 1.0		# 6.0
+@export var turbo_thrust_multiplier: float = 1.8		# 6.0
 @export var allow_turbo: bool = true
 
 @export_category("Fuel")
@@ -179,8 +179,8 @@ func _physics_process(delta: float) -> void:
 	# Update gravity based on altitude if enabled
 	if use_altitude_gravity and _gravity_field_manager != null:
 		_current_gravity_vector = _gravity_field_manager.get_gravity_at_position(global_position)
-		if debug_logging and Engine.get_physics_frames() % 60 == 0:  # Log every second
-			print("[LanderController] Gravity at position ", global_position, ": ", _current_gravity_vector)
+		#if debug_logging and Engine.get_physics_frames() % 60 == 0:  # Log every second
+		#	print("[LanderController] Gravity at position ", global_position, ": ", _current_gravity_vector)
 
 	#_current_gravity_vector = Vector2(0, 30)  # DEBUG ONLY - COMMENTED OUT
 	_apply_controls(delta)
@@ -232,6 +232,7 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 		state.apply_central_force(_current_gravity_vector * mass)
 
 	# Every 60 frames, compare velocity to last logged velocity
+	'''
 	var f := Engine.get_physics_frames()
 	if f % 60 == 0 and f != _last_frame_logged:
 		var dv := state.linear_velocity - _last_vel
@@ -242,6 +243,7 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 		print("  approx accel: ", dv / (60.0 * state.step))
 		_last_vel = state.linear_velocity
 		_last_frame_logged = f
+		'''
 
 
 # -------------------------------------------------------------------
@@ -251,9 +253,8 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 func _apply_controls(delta: float) -> void:
 	# Gather input.
 	var thrust_input: float = Input.get_action_strength("lander_thrust")
-	var turbo_pressed: bool = false
-	if allow_turbo:
-		turbo_pressed = Input.is_action_pressed("lander_turbo")
+	#var turbo_pressed: bool = false
+	var turbo_pressed:bool = Input.is_action_pressed("lander_turbo")
 
 	var rotate_right: float = Input.get_action_strength("lander_rotate_right")
 	var rotate_left: float = Input.get_action_strength("lander_rotate_left")
@@ -271,6 +272,9 @@ func _apply_controls(delta: float) -> void:
 		elif angular_velocity < 0.0:
 			angular_velocity = min(0.0, angular_velocity + drag_step)
 
+	if allow_turbo and turbo_pressed:
+		thrust_input = 1.0
+
 	# Apply thrust if we have fuel and there is thrust input.
 	if thrust_input > 0.0 and _current_fuel > 0.0:
 		# FIXED: Use 1.0 as default multiplier, not 3.0!
@@ -278,7 +282,7 @@ func _apply_controls(delta: float) -> void:
 		var fuel_mult: float = 1.0
 
 		if allow_turbo and turbo_pressed:	
-			thrust_multiplier = turbo_thrust_multiplier
+			thrust_multiplier += turbo_thrust_multiplier
 			fuel_mult = turbo_fuel_multiplier
 
 		var thrust_force: float = base_thrust_force * thrust_input * thrust_multiplier
@@ -296,8 +300,6 @@ func _apply_controls(delta: float) -> void:
 		var thrust_strength: float = thrust_input
 		if allow_turbo and turbo_pressed:
 			thrust_strength *= 1.5 # or whatever makes sense
-
-		EventBus.emit_signal("lander_thrust", thrust_strength)
 
 # -------------------------------------------------------------------
 # Fuel
@@ -593,8 +595,6 @@ func apply_mission_modifiers(mission_config: Dictionary) -> void:
 	# For now this just forwards to the loadout logic.
 	reset_for_new_mission()
 	_apply_ship_loadout(mission_config)
-		
-	print("\t............[Debug] Lander freeze=", self.freeze, " sleeping=", self.sleeping)
 
 
 # -------------------------------------------------------------------

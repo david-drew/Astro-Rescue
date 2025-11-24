@@ -91,7 +91,7 @@ func regenerate_last() -> void:
 func get_landing_zone_world_info(zone_id: String) -> Dictionary:
 	return _landing_zones_info.get(zone_id, {})
 
-# NEW: Public getters for integration with other systems
+# Public getters for integration with other systems
 func get_highest_point_y() -> float:
 	"""Get the Y coordinate of the highest terrain point (for gravity/spawning)"""
 	return _highest_point_y
