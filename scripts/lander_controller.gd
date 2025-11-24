@@ -377,16 +377,41 @@ func _on_body_entered(body: Node) -> void:
 			})
 
 func _handle_safe_landing() -> void:
-	if _has_sent_touchdown:
-		return
+        if _has_sent_touchdown:
+                return
+
+        _has_sent_touchdown = true
 	
-	_has_sent_touchdown = true
-	
-	if debug_logging:
-		print("[LanderController] Safe touchdown!")
-	
-	EventBus.emit_signal("lander_touchdown", {})
-	EventBus.emit_signal("lander_landed_safely", {})
+        if debug_logging:
+                print("[LanderController] Safe touchdown!")
+
+        EventBus.emit_signal("lander_touchdown", {})
+        EventBus.emit_signal("lander_landed_safely", {})
+
+func get_landing_state(_terrain_generator: TerrainGenerator = null, zone_id: String = "", zone_info: Dictionary = {}) -> Dictionary:
+        var v: Vector2 = linear_velocity
+        var v_vert: float = abs(v.y)
+        var v_horiz: float = abs(v.x)
+        var speed: float = v.length()
+        var tilt_deg: float = abs(rad_to_deg(rotation))
+
+        var successful: bool = v_vert <= destroy_vertical_speed and v_horiz <= destroy_horizontal_speed and tilt_deg <= safe_tilt_deg
+
+        var hull_damage_ratio: float = 0.0
+        if not successful:
+                var over_speed: float = max(max(v_vert - safe_vertical_speed, v_horiz - safe_horizontal_speed), 0.0)
+                hull_damage_ratio = clamp(over_speed / max(destroy_vertical_speed, 1.0), 0.0, 1.0)
+
+        return {
+                "successful": successful,
+                "impact_speed": speed,
+                "vertical_speed": v_vert,
+                "horizontal_speed": v_horiz,
+                "tilt_deg": tilt_deg,
+                "landing_zone_id": zone_id,
+                "landing_zone_info": zone_info,
+                "hull_damage_ratio": hull_damage_ratio
+        }
 
 func _handle_destruction(cause: String, context: Dictionary) -> void:
 	"""
