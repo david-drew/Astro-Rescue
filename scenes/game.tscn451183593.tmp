@@ -38,7 +38,6 @@ debug_logging = true
 
 [node name="MissionController" type="Node" parent="Systems"]
 script = ExtResource("2_iywne")
-debug_logging = true
 terrain_generator_path = NodePath("../../World/TerrainGenerator")
 terrain_tiles_controller_path = NodePath("../TerrainTilesController")
 lander_path = NodePath("../../World/Lander")
@@ -146,7 +145,6 @@ custom_minimum_size = Vector2(230, 260)
 
 [node name="BriefingPanel" type="Control" parent="UI"]
 visible = false
-self_modulate = Color(1, 1, 1, 0.78431374)
 layout_mode = 3
 anchors_preset = 8
 anchor_left = 0.5
@@ -164,8 +162,8 @@ size_flags_vertical = 6
 script = ExtResource("18_264po")
 
 [node name="TextureRect" type="TextureRect" parent="UI/BriefingPanel"]
-modulate = Color(0.20392157, 0.44313726, 0.58431375, 0.84705883)
-self_modulate = Color(0.3764706, 0.58431375, 1, 0.8627451)
+modulate = Color(0.20392157, 0.44313726, 0.58431375, 1)
+self_modulate = Color(0.3764706, 0.58431375, 1, 1)
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -226,16 +224,12 @@ size_flags_vertical = 6
 script = ExtResource("19_1kice")
 
 [node name="TextureRect" type="TextureRect" parent="UI/DebriefPanel"]
-modulate = Color(0.20392157, 0.44313726, 0.58431375, 0.84705883)
-self_modulate = Color(0.3764706, 0.58431375, 1, 0.8627451)
+modulate = Color(0.20392157, 0.44313726, 0.58431375, 1)
+self_modulate = Color(0.3764706, 0.58431375, 1, 1)
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -580.0
-offset_top = -280.0
-offset_right = 580.0
-offset_bottom = 280.0
 grow_horizontal = 2
 grow_vertical = 2
 texture = SubResource("GradientTexture2D_trtic")

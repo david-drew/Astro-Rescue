@@ -67,7 +67,7 @@ signal lander_unlocked(lander_id: String)	# new lander unlocked.
 signal crew_unlocked(crew_id: String)		# new crew member unlocked.
 signal mission_tag_unlocked(tag: String)	# new mission tag is unlocked (gates archetypes/arcs).
 
-signal terrain_generated(terrain_generator:TerrainGenerator)
+signal terrain_generated(terrain_generator:Node)
 
 # -------------------------------------------------------------------
 # Mission lifecycle (config, runtime, results)
@@ -118,6 +118,8 @@ signal lander_destroyed(cause: String, context: Dictionary)
 
 ## Emitted whenever fuel changes significantly (optional throttle; up to the lander controller).
 signal fuel_changed(current_ratio: float)
+signal fuel_depleted()
+signal fuel_critical()
 
 ## Emitted when player death is detected (e.g., catastrophic impact, hazard).
 signal player_died(cause: String, context: Dictionary)

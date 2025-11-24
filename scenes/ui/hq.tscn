@@ -4,12 +4,11 @@
 [ext_resource type="Script" uid="uid://jpk57u2boiaa" path="res://scripts/ui/mission_board_manager.gd" id="1_sld6d"]
 [ext_resource type="Texture2D" uid="uid://dyx4vd6foak4a" path="res://assets/images/ui/moonbase_01_HQ.png" id="2_j13xk"]
 [ext_resource type="Script" uid="uid://dd5xqw46qmcs5" path="res://scripts/ui/crew_manager.gd" id="3_4jwxx"]
+[ext_resource type="Texture2D" uid="uid://cy3gcupso4nvv" path="res://assets/images/ui/frame_06_UWHQ.png" id="3_6axbc"]
 [ext_resource type="Texture2D" uid="uid://c0k4wwast6olj" path="res://assets/images/ui/button_close_metallic_sf_01.png" id="4_j6p2v"]
 [ext_resource type="Script" uid="uid://c727pfv3pdv6l" path="res://scripts/ui/store_manager.gd" id="4_j13xk"]
 
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_j6p2v"]
-
-[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_6axbc"]
 
 [node name="HQ" type="Control"]
 layout_mode = 3
@@ -29,7 +28,7 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(2.0214916e-06, 0.34318787, 0.64277726, 1)
 
-[node name="TextureRect" type="TextureRect" parent="."]
+[node name="Background" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -46,6 +45,20 @@ texture = ExtResource("2_j13xk")
 expand_mode = 3
 stretch_mode = 5
 
+[node name="Frame" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+grow_horizontal = 2
+grow_vertical = 2
+scale = Vector2(1.3, 1.3)
+texture = ExtResource("3_6axbc")
+expand_mode = 5
+stretch_mode = 3
+
 [node name="ControlPanel" type="Control" parent="."]
 layout_mode = 1
 anchors_preset = 6
@@ -53,9 +66,9 @@ anchor_left = 1.0
 anchor_top = 0.5
 anchor_right = 1.0
 anchor_bottom = 0.5
-offset_left = -340.0
+offset_left = -740.0
 offset_top = -20.0
-offset_right = -300.0
+offset_right = -700.0
 offset_bottom = 20.0
 grow_horizontal = 0
 grow_vertical = 2
@@ -90,15 +103,15 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 20
 
-[node name="Label" type="Label" parent="ControlPanel/PanelBG/VBox"]
+[node name="Title" type="Label" parent="ControlPanel/PanelBG/VBox"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 32
 text = "CONTROLS"
 horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="VSeparator" type="VSeparator" parent="ControlPanel/PanelBG/VBox"]
-custom_minimum_size = Vector2(0, 20)
+custom_minimum_size = Vector2(0, 10)
 layout_mode = 2
 theme_override_styles/separator = SubResource("StyleBoxEmpty_j6p2v")
 
@@ -122,11 +135,6 @@ layout_mode = 2
 tooltip_text = "Fuel & Upgrades"
 theme_override_font_sizes/font_size = 32
 text = "STORE"
-
-[node name="VSeparator2" type="VSeparator" parent="ControlPanel/PanelBG/VBox"]
-custom_minimum_size = Vector2(0, 20)
-layout_mode = 2
-theme_override_styles/separator = SubResource("StyleBoxEmpty_6axbc")
 
 [node name="StatusStrip" type="RichTextLabel" parent="ControlPanel/PanelBG/VBox"]
 layout_mode = 2

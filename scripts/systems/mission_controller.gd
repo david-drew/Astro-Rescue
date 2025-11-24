@@ -1,6 +1,6 @@
 ## res://scripts/modes/mode1/mission_controller.gd
 extends Node
-#class_name MissionController
+class_name MissionController
 
 ##
 # MissionController (Mode 1 - Lander)
@@ -70,17 +70,37 @@ var _player_died: bool = false
 var _lander_destroyed: bool = false
 var _landing_successful: bool = false
 
+# Touchdown gating / debounce
+var _touchdown_armed: bool = false
+var _touchdown_consumed_for_phase: bool = false
+var _last_touchdown_ms: int = -999999
+
+# Landing forgiveness
+var _landing_tolerance_mult: float = 1.4
+
+
 var _orbit_reached: bool = false
 var _orbit_reached_altitude: float = 0.0
 var _orbit_reached_time: float = 0.0
 
-var _terrain_generator: TerrainGenerator = null
+var _terrain_generator: Node = null
 var _terrain_tiles_controller: TerrainTilesController = null
 var _lander: RigidBody2D = null
 var _hud: Node = null
 var _orbital_view: OrbitalView = null  			# NEW!
 var _using_orbital_view: bool = false  			# NEW!
 var _orbital_transition_complete: bool = false  # NEW!
+
+# --- v1.4 mission json phase runtime ---
+var _phases: Array = []                 # raw phase dicts from mission json (or legacy-wrapped)
+var _current_phase_index: int = -1
+var _current_phase: Dictionary = {}
+
+var _active_objectives: Array = []      # objectives for current phase (runtime-tracked)
+var _active_bonus_objectives: Array = [] # optional; if you decide to support per-phase bonus later
+
+# Legacy support flags
+var _uses_v1_4_phases: bool = true
 
 
 # -------------------------------------------------------------------
@@ -97,11 +117,11 @@ func _reset_mission_runtime_state() -> void:
 	_mission_elapsed_time = 0.0
 
 	_current_fuel_ratio = 1.0
-        _max_hull_damage_ratio = 0.0
-        _crashes_count = 0
-        _player_died = false
-        _lander_destroyed = false
-        _landing_successful = false
+	_max_hull_damage_ratio = 0.0
+	_crashes_count = 0
+	_player_died = false
+	_lander_destroyed = false
+	_landing_successful = false
 
 	_orbit_reached = false
 	_orbit_reached_altitude = 0.0
@@ -146,8 +166,6 @@ func _ready() -> void:
 	if debug_logging:
 		print("[MissionController] Ready. Waiting for begin_mission() call.")
 
-	print("\tCHECK TG Path: ", terrain_generator_path)
-
 func _process(delta: float) -> void:
 	if _mission_state != "running":
 		return
@@ -165,7 +183,7 @@ func _load_mission_config() -> void:
 	# Priority:
 	#   1) Use GameState.current_mission_config if non-empty (e.g., set by MissionGenerator).
 	#   2) Otherwise, if mission_file_id is set, load JSON from disk under mission_data_dir.
-	
+
 	if not GameState:
 		push_warning("MissionController: GameState singleton not found; cannot load mission config.")
 		return
@@ -194,39 +212,33 @@ func _load_mission_config() -> void:
 						GameState.current_mission_config = loaded2.duplicate(true)
 
 	if _mission_config.is_empty():
-		print("\tERROR both mission file loads FAILED")
 		push_warning("MissionController: No mission config available (GameState empty and file load failed).")
 		return
 
 	_mission_id = _mission_config.get("id", "")
-	_is_training = bool(_mission_config.get("is_training", false))
+
+	# Landing forgiveness multiplier (v1.4+). Defaults to 1.0.
+	# Bigger = more tolerant of speed/impact.
+	_landing_tolerance_mult = float(_mission_config.get("mission_modifiers", {}).get("landing_tolerance_mult", 1.0))
+	if _landing_tolerance_mult <= 0.0:
+		_landing_tolerance_mult = 1.0
+
+	# IMPORTANT: is_training no longer exists. Training is category == "tutorial".
+	var cat: String = str(_mission_config.get("category", ""))
+	_is_training = (cat == "tutorial")
+
 	_tier = int(_mission_config.get("tier", 0))
 
 	_failure_rules = _mission_config.get("failure_rules", {})
 	_rewards = _mission_config.get("rewards", {})
 
-	# Normalize objectives into runtime-tracked arrays.
-	var objectives: Dictionary = _mission_config.get("objectives", {})
-	var prim: Array = objectives.get("primary", [])
-	var bonus: Array = objectives.get("bonus", [])
+	# -------------------------
+	# v1.4 Phases + Objectives
+	# -------------------------
+	_build_runtime_phases_from_config()
 
-	_primary_objectives.clear()
-	for obj in prim:
-		if typeof(obj) != TYPE_DICTIONARY:
-			continue
-		var runtime_obj: Dictionary = obj.duplicate(true)
-		runtime_obj["status"] = "pending"  # "pending", "completed", "failed"
-		runtime_obj["progress"] = {}
-		_primary_objectives.append(runtime_obj)
-
-	_bonus_objectives.clear()
-	for obj_b in bonus:
-		if typeof(obj_b) != TYPE_DICTIONARY:
-			continue
-		var runtime_obj_b: Dictionary = obj_b.duplicate(true)
-		runtime_obj_b["status"] = "pending"
-		runtime_obj_b["progress"] = {}
-		_bonus_objectives.append(runtime_obj_b)
+	# Initialize runtime objectives for phase 0 (or legacy-wrapped phase)
+	_set_current_phase(0)
 
 	# Time limit
 	_mission_time_limit = float(_failure_rules.get("time_limit_seconds", -1.0))
@@ -238,9 +250,97 @@ func _load_mission_config() -> void:
 			_mission_time_limit = 900.0  # 15 minutes for training missions
 		else:
 			_mission_time_limit = 600.0  # 10 minutes default for regular missions
-	
-	# After computing _mission_time_limit:
+
 	_reset_mission_timer()
+
+
+func _build_runtime_phases_from_config() -> void:	
+	_phases.clear()
+	_uses_v1_4_phases = false
+
+	var raw_phases: Array = _mission_config.get("phases", [])
+	if raw_phases.size() > 0:
+		# v1.4 mission
+		_uses_v1_4_phases = true
+
+		for p in raw_phases:
+			if typeof(p) != TYPE_DICTIONARY:
+				continue
+			_phases.append(p.duplicate(true))
+
+		return
+
+	# -------------------------
+	# Legacy fallback (pre-1.4)
+	# Wrap top-level spawn/objectives into a single lander phase
+	# -------------------------
+	var legacy_spawn: Dictionary = _mission_config.get("spawn", {})
+	var legacy_objectives: Dictionary = _mission_config.get("objectives", {})
+	var legacy_primary: Array = legacy_objectives.get("primary", [])
+
+	var legacy_phase: Dictionary = {
+		"id": "legacy_descent",
+		"mode": "lander",
+		"spawn": legacy_spawn,
+		"objectives": legacy_primary,
+		"completion": {
+			# Legacy missions end their only phase on landing.
+			# Your existing touchdown handler + objectives should determine success.
+			"type": "legacy"
+		}
+	}
+
+	_phases.append(legacy_phase)
+
+
+func _set_current_phase(index: int) -> void:
+	if _phases.is_empty():
+		push_warning("MissionController: No phases available after build.")
+		_current_phase_index = -1
+		_current_phase = {}
+		_active_objectives.clear()
+		_active_bonus_objectives.clear()
+		return
+
+	if index < 0 or index >= _phases.size():
+		push_warning("MissionController: Phase index out of range: " + str(index))
+		return
+
+	_current_phase_index = index
+	_current_phase = _phases[index]
+
+	# Build runtime objectives for this phase.
+	_active_objectives.clear()
+	_active_bonus_objectives.clear()
+
+	var objs: Array = _current_phase.get("objectives", [])
+	for obj in objs:
+		if typeof(obj) != TYPE_DICTIONARY:
+			continue
+		var runtime_obj: Dictionary = obj.duplicate(true)
+		runtime_obj["status"] = "pending"  # "pending", "completed", "failed"
+		runtime_obj["progress"] = {}
+		_active_objectives.append(runtime_obj)
+
+	# Legacy bonus objectives still exist at top level; keep them global for now.
+	_bonus_objectives.clear()
+	var legacy_obj_block: Dictionary = _mission_config.get("objectives", {})
+	var legacy_bonus: Array = legacy_obj_block.get("bonus", [])
+	for obj_b in legacy_bonus:
+		if typeof(obj_b) != TYPE_DICTIONARY:
+			continue
+		var runtime_obj_b: Dictionary = obj_b.duplicate(true)
+		runtime_obj_b["status"] = "pending"
+		runtime_obj_b["progress"] = {}
+		_bonus_objectives.append(runtime_obj_b)
+
+	# Keep old arrays in sync so the rest of your controller doesn't explode.
+	_primary_objectives = _active_objectives.duplicate(true)
+
+	print("\t.............Current Phase Set..................") 		# TODO DELETE
+	_arm_touchdown_for_current_phase()
+
+
 
 func _load_mission_config_from_json(id_or_filename: String) -> Dictionary:
 	##
@@ -282,7 +382,7 @@ func _load_mission_config_from_json(id_or_filename: String) -> Dictionary:
 func _apply_mission_terrain() -> void:
 	if _terrain_generator == null:
 		if terrain_generator_path != NodePath(""):
-			_terrain_generator = get_node_or_null(terrain_generator_path) as TerrainGenerator
+			_terrain_generator = get_node_or_null(terrain_generator_path) as Node
 	if _terrain_generator == null:
 		return
 
@@ -335,14 +435,14 @@ func _position_lander_from_spawn(zid:String="") -> void:
 
 	# Bind or confirm terrain generator.
 	if _terrain_generator == null and terrain_generator_path != NodePath(""):
-		_terrain_generator = get_tree().current_scene.get_node_or_null(terrain_generator_path) as TerrainGenerator
+		_terrain_generator = get_tree().current_scene.get_node_or_null(terrain_generator_path) as Node
 	if _terrain_generator == null:
 		push_warning("[MissionController] Cannot position lander; no TerrainGenerator available.")
 		return
 
 	# If a zone was selected via OrbitalView, use that first.
 	if zid != "":
-		var zone_info := _terrain_generator.get_landing_zone_world_info(zid)
+		var zone_info:Dictionary = _terrain_generator.get_landing_zone_world_info(zid)
 		if zone_info != null:
 			var default_spawn_height := 10000.0
 			#landing_zone.spawn_position = Vector2( zone_center_x, surface_y - default_spawn_height )
@@ -439,11 +539,11 @@ func _connect_eventbus_signals() -> void:
 	if not eb.is_connected("lander_destroyed", Callable(self, "_on_lander_destroyed")):
 		eb.connect("lander_destroyed", Callable(self, "_on_lander_destroyed"))
 
-        if not eb.is_connected("fuel_changed", Callable(self, "_on_fuel_changed")):
-                eb.connect("fuel_changed", Callable(self, "_on_fuel_changed"))
+		if not eb.is_connected("fuel_changed", Callable(self, "_on_fuel_changed")):
+				eb.connect("fuel_changed", Callable(self, "_on_fuel_changed"))
 
-        if eb.has_signal("lander_altitude_changed") and not eb.is_connected("lander_altitude_changed", Callable(self, "_on_lander_altitude_changed")):
-                eb.connect("lander_altitude_changed", Callable(self, "_on_lander_altitude_changed"))
+		if eb.has_signal("lander_altitude_changed") and not eb.is_connected("lander_altitude_changed", Callable(self, "_on_lander_altitude_changed")):
+				eb.connect("lander_altitude_changed", Callable(self, "_on_lander_altitude_changed"))
 
 	if not eb.is_connected("player_died", Callable(self, "_on_player_died")):
 		eb.connect("player_died", Callable(self, "_on_player_died"))
@@ -508,7 +608,7 @@ func prepare_mission() -> void:
 	
 	# Refresh scene references
 	if terrain_generator_path != NodePath(""):
-		_terrain_generator = get_node_or_null(terrain_generator_path) as TerrainGenerator
+		_terrain_generator = get_node_or_null(terrain_generator_path) as Node
 	
 	if lander_path != NodePath(""):
 		_lander = get_node_or_null(lander_path)
@@ -599,39 +699,174 @@ func abort_mission(reason: String = "aborted") -> void:
 # -------------------------------------------------------------------
 # Event handlers
 # -------------------------------------------------------------------
-func _on_landing(zone_info: Dictionary) -> void:
+func _on_landing(zone_id:String, zone_info: Dictionary) -> void:
 	print("TOUCHDOWN (landing)!!")
 	_on_touchdown(zone_info)
 
 func _on_touchdown(touchdown_data: Dictionary) -> void:
-        if _mission_state != "running":
-                return
+	if _mission_state != "running":
+		return
 
-        var success: bool = bool(touchdown_data.get("successful", touchdown_data.get("success", false)))
-        var impact_data: Dictionary = touchdown_data.get("impact_data", touchdown_data)
-        if impact_data.is_empty():
-                return
+	# Ignore touchdown if we aren't in a descent lander phase
+	if _uses_v1_4_phases:
+		if not _touchdown_armed:
+			return
+		if _touchdown_consumed_for_phase:
+			return
+
+		# Debounce rapid repeats (bounce/slide contacts)
+		var now_ms: int = Time.get_ticks_msec()
+		if now_ms - _last_touchdown_ms < 500:
+			return
+		_last_touchdown_ms = now_ms
+
+	var success: bool = bool(touchdown_data.get("successful", touchdown_data.get("success", false)))
+	var impact_data: Dictionary = touchdown_data.get("impact_data", touchdown_data)
+	if impact_data.is_empty():
+		return
+
+	# Apply forgiveness: relax impact speed / success classification a bit.
+	# If your touchdown sender includes an impact/velocity magnitude, scale it down for evaluation.
+	# We do NOT lie to physics — only to objective evaluation and crash classification.
+	var eval_impact_data: Dictionary = impact_data.duplicate(true)
+	if eval_impact_data.has("impact_speed"):
+		var spd: float = float(eval_impact_data.get("impact_speed", 0.0))
+		eval_impact_data["impact_speed"] = spd / _landing_tolerance_mult
+	if eval_impact_data.has("vertical_speed"):
+		var vsp: float = float(eval_impact_data.get("vertical_speed", 0.0))
+		eval_impact_data["vertical_speed"] = vsp / _landing_tolerance_mult
+	if eval_impact_data.has("horizontal_speed"):
+		var hsp: float = float(eval_impact_data.get("horizontal_speed", 0.0))
+		eval_impact_data["horizontal_speed"] = hsp / _landing_tolerance_mult
+
+	# If the sender gave a boolean success, and we scaled speeds,
+	# we can optionally re-derive success if a speed threshold exists.
+	# Otherwise leave success as-is.
+	if eval_impact_data.has("max_safe_impact_speed"):
+		var max_safe: float = float(eval_impact_data.get("max_safe_impact_speed", 30.0))
+		var used_speed: float = float(eval_impact_data.get("impact_speed", 0.0))
+		if max_safe > 0.0 and used_speed <= max_safe:
+			success = true
 
 	if debug_logging:
-		print("[MissionController] Touchdown event received: success=", success, " impact_data=", impact_data)
+		print("[MissionController] Touchdown event received: success=", success, " impact_data=", impact_data, " tol_mult=", _landing_tolerance_mult)
 
 	# Update crash / hull damage info
 	var hull_damage_ratio: float = float(impact_data.get("hull_damage_ratio", 0.0))
 	if hull_damage_ratio > _max_hull_damage_ratio:
 		_max_hull_damage_ratio = hull_damage_ratio
 
-        if not success:
-                _crashes_count += 1
-        else:
-                _landing_successful = true
+	if not success:
+		_crashes_count += 1
+	else:
+		_landing_successful = true
 
-        _evaluate_landing_objectives(impact_data, success)
-        # Evaluate any precision landing objectives.
-        _evaluate_precision_landing_objectives(impact_data)
-        _evaluate_landing_accuracy_objectives(impact_data)
+	# Always evaluate landing-related objectives on touchdown
+	_evaluate_landing_objectives(eval_impact_data, success)
+	_evaluate_precision_landing_objectives(eval_impact_data)
+	_evaluate_landing_accuracy_objectives(eval_impact_data)
 
-	# After touchdown: check if objectives are satisfied, and auto-end if configured.
-	_check_for_mission_completion()
+	# v1.4: see if this touchdown completes the current lander phase
+	_check_phase_completion_from_touchdown(success, eval_impact_data)
+
+	if _uses_v1_4_phases:
+		# Consume touchdown for this descent phase so bounces can't re-trigger
+		_touchdown_consumed_for_phase = true
+	else:
+		_check_for_mission_completion()
+
+
+func _check_phase_completion_from_touchdown(success: bool, impact_data: Dictionary) -> void:
+	print("\t..........Check Phase TDown Completion............")		# TODO DELETE
+	
+	if not _uses_v1_4_phases:
+		return
+
+	if _current_phase.is_empty():
+		return
+
+	var mode: String = str(_current_phase.get("mode", ""))
+	if mode != "lander":
+		return
+
+	var comp: Dictionary = _current_phase.get("completion", {})
+	var ctype: String = str(comp.get("type", ""))
+
+	# Legacy-wrapped phases don't drive advancement here.
+	if ctype == "" or ctype == "legacy":
+		return
+
+	# If touchdown wasn't successful, don't advance phases here.
+	# Your existing objective/fail logic will handle mission failure.
+	if not success:
+		return
+
+	# Try to read which zone we landed in (if TerrainGenerator provides it).
+	var landed_zone_id: String = ""
+	if impact_data.has("zone_id"):
+		landed_zone_id = str(impact_data.get("zone_id", ""))
+	elif impact_data.has("landing_zone_id"):
+		landed_zone_id = str(impact_data.get("landing_zone_id", ""))
+
+	var ok: bool = false
+
+	if ctype == "landed_in_zone":
+		var target_zone: String = str(comp.get("zone_id", ""))
+		if target_zone == "any" or target_zone == "any_marked":
+			ok = true
+		elif landed_zone_id != "" and landed_zone_id == target_zone:
+			ok = true
+
+	# You can add more touchdown-driven completion types later if needed.
+
+	if ok:
+		if debug_logging:
+			print("[MissionController] Phase complete on touchdown. Advancing from phase ", _current_phase_index)
+		_advance_phase()
+
+
+func _advance_phase() -> void:
+	if _current_phase_index < 0:
+		return
+
+	var next_index: int = _current_phase_index + 1
+	if next_index >= _phases.size():
+		# No more phases; rely on existing mission completion path.
+		_check_for_mission_completion()
+		return
+
+	_set_current_phase(next_index)
+
+	# Enter next phase mode. Keep this minimal for now.
+	_enter_current_phase()
+
+
+func _enter_current_phase() -> void:
+	if _current_phase.is_empty():
+		return
+
+	var mode: String = str(_current_phase.get("mode", ""))
+
+	if debug_logging:
+		print("[MissionController] Entering phase ", _current_phase_index, " mode=", mode, " id=", _current_phase.get("id", ""))
+
+	# Lander phases after touchdown (e.g., ascent) don't need a scene swap.
+	# Player is already in lander gameplay; objectives now guide takeoff.
+	if mode == "lander":
+		return
+
+	# Buggy / EVA will be wired later.
+	# We avoid calling missing methods to keep this patch safe.
+	if mode == "buggy":
+		print("\t................We want buggy phase.................") 	# TODO DELETE
+		EventBus.emit_signal("phase_mode_requested", "buggy", _current_phase)
+		return
+
+	if mode == "rescue":
+		print("\t................We want EVA phase.................") 		# TODO DELETE
+		EventBus.emit_signal("phase_mode_requested", "rescue", _current_phase)
+		return
+
 
 # TODO: Use cause & context
 func _on_lander_destroyed(cause:String, context:Dictionary) -> void:
@@ -647,25 +882,25 @@ func _on_lander_destroyed(cause:String, context:Dictionary) -> void:
 
 
 func _on_fuel_changed(current_ratio: float) -> void:
-        if _mission_state != "running":
-                return
+		if _mission_state != "running":
+				return
 
-        _current_fuel_ratio = clamp(current_ratio, 0.0, 1.0)
+		_current_fuel_ratio = clamp(current_ratio, 0.0, 1.0)
 
 func _on_lander_altitude_changed(altitude_meters: float) -> void:
-        if _mission_state != "running":
-                return
+		if _mission_state != "running":
+				return
 
-        # Only consider return-to-orbit after a successful landing.
-        if _orbit_reached or not _landing_successful:
-                return
+		# Only consider return-to-orbit after a successful landing.
+		if _orbit_reached or not _landing_successful:
+				return
 
-        var required_altitude: float = _get_return_to_orbit_min_altitude()
+		var required_altitude: float = _get_return_to_orbit_min_altitude()
 
-        if altitude_meters >= required_altitude:
-                notify_orbit_reached(altitude_meters)
-                _evaluate_return_to_orbit_objectives()
-                _check_for_mission_completion()
+		if altitude_meters >= required_altitude:
+				notify_orbit_reached(altitude_meters)
+				_evaluate_return_to_orbit_objectives()
+				_check_for_mission_completion()
 
 
 func _on_player_died() -> void:
@@ -691,69 +926,68 @@ func _on_mission_timer_timeout() -> void:
 	_force_fail_all_pending_primary("time_limit")
 	_end_mission("fail", "time_limit_exceeded")
 
-
 # -------------------------------------------------------------------
 # Objective evaluation
 # -------------------------------------------------------------------
 
 func _get_obj_param(obj: Dictionary, key: String, default_value):
-        var params: Dictionary = obj.get("params", {})
-        if params.has(key):
-                return params.get(key, default_value)
-        return obj.get(key, default_value)
+		var params: Dictionary = obj.get("params", {})
+		if params.has(key):
+				return params.get(key, default_value)
+		return obj.get(key, default_value)
 
 func _get_return_to_orbit_min_altitude() -> float:
-        var min_altitude: float = 0.0
-        for obj in _primary_objectives:
-                if obj.get("type", "") != "return_to_orbit":
-                        continue
+	var min_altitude: float = 0.0
+	for obj in _primary_objectives:
+		if obj.get("type", "") != "return_to_orbit":
+			continue
 
-                var candidate: float = float(_get_obj_param(obj, "min_altitude", 0.0))
-                if candidate > 0.0 and (min_altitude <= 0.0 or candidate < min_altitude):
-                        min_altitude = candidate
+		var candidate: float = float(_get_obj_param(obj, "min_altitude", 0.0))
+		if candidate > 0.0 and (min_altitude <= 0.0 or candidate < min_altitude):
+			min_altitude = candidate
 
-        # If no explicit return-to-orbit altitude was set on objectives, fall back to the
-        # mission's spawn height, which represents the orbital insertion altitude.
-        if min_altitude <= 0.0:
-                var spawn_cfg: Dictionary = _mission_config.get("spawn", {})
-                var spawn_height: float = float(spawn_cfg.get("height_above_surface", 0.0))
-                if spawn_height > 0.0:
-                        min_altitude = spawn_height
+		# If no explicit return-to-orbit altitude was set on objectives, fall back to the
+		# mission's spawn height, which represents the orbital insertion altitude.
+		if min_altitude <= 0.0:
+			var spawn_cfg: Dictionary = _mission_config.get("spawn", {})
+			var spawn_height: float = float(spawn_cfg.get("height_above_surface", 0.0))
+			if spawn_height > 0.0:
+				min_altitude = spawn_height
 
-        # Final fallback: ensure orbit requires a meaningful climb.
-        if min_altitude <= 0.0:
-                min_altitude = 10000.0
+	# Final fallback: ensure orbit requires a meaningful climb.
+	if min_altitude <= 0.0:
+		min_altitude = 10000.0
 
-        return min_altitude
+	return min_altitude
 
 func _evaluate_landing_objectives(impact_data: Dictionary, success: bool) -> void:
-        for obj in _primary_objectives:
-                if obj.get("type", "") != "landing":
-                        continue
-                if obj.get("status", "pending") != "pending":
-                        continue
+		for obj in _primary_objectives:
+				if obj.get("type", "") != "landing":
+						continue
+				if obj.get("status", "pending") != "pending":
+						continue
 
-                if not success:
-                        continue
+				if not success:
+						continue
 
-                var target_zone_id: String = _get_obj_param(obj, "target_zone_id", "")
-                var landing_zone_id: String = impact_data.get("landing_zone_id", "")
-                if target_zone_id != "" and target_zone_id != "any" and landing_zone_id != target_zone_id:
-                        continue
+				var target_zone_id: String = _get_obj_param(obj, "target_zone_id", "")
+				var landing_zone_id: String = impact_data.get("landing_zone_id", "")
+				if target_zone_id != "" and target_zone_id != "any" and landing_zone_id != target_zone_id:
+						continue
 
-                var max_speed: float = float(_get_obj_param(obj, "max_impact_speed", 0.0))
-                var impact_speed: float = float(impact_data.get("impact_speed", 0.0))
-                if max_speed > 0.0 and impact_speed > max_speed:
-                        continue
+				var max_speed: float = float(_get_obj_param(obj, "max_impact_speed", 0.0))
+				var impact_speed: float = float(impact_data.get("impact_speed", 0.0))
+				if max_speed > 0.0 and impact_speed > max_speed:
+						continue
 
-                obj["status"] = "completed"
-                _landing_successful = true
-                if debug_logging:
-                        print("[MissionController] Objective completed: landing id=", obj.get("id", ""))
+				obj["status"] = "completed"
+				_landing_successful = true
+				if debug_logging:
+						print("[MissionController] Objective completed: landing id=", obj.get("id", ""))
 
 func _evaluate_precision_landing_objectives(impact_data: Dictionary) -> void:
-        for obj in _primary_objectives:
-                if obj.get("type", "") != "precision_landing":
+	for obj in _primary_objectives:
+		if obj.get("type", "") != "precision_landing":
 			continue
 		if obj.get("status", "pending") != "pending":
 			continue
@@ -1205,8 +1439,8 @@ func _on_orbital_transition_started() -> void:
 		push_warning("[MissionController] No target position stored for transition!")
 		# Fallback
 		if _terrain_generator != null:
-			var center_x := _terrain_generator.get_center_x()
-			var surface_y := _terrain_generator.get_highest_point_y()
+			var center_x:float  = _terrain_generator.get_center_x()
+			var surface_y:float = _terrain_generator.get_highest_point_y()
 			target_pos = Vector2(center_x, surface_y - 12000.0)
 	
 	# Tell orbital view to zoom to this position
@@ -1231,7 +1465,7 @@ func _on_orbital_zone_selected(zone_id: String) -> void:
 		return
 
 	if _terrain_generator == null and terrain_generator_path != NodePath(""):
-		_terrain_generator = get_node_or_null(terrain_generator_path) as TerrainGenerator
+		_terrain_generator = get_node_or_null(terrain_generator_path) as Node
 
 	# Store selected zone for spawn positioning
 	if not _mission_config.has("spawn"):
@@ -1259,8 +1493,8 @@ func _on_orbital_zone_selected(zone_id: String) -> void:
 		else:
 			push_warning("[MissionController] Could not find landing zone info for: ", zone_id)
 			# Fallback to terrain center
-			var center_x := _terrain_generator.get_center_x()
-			var surface_y := _terrain_generator.get_highest_point_y()
+			var center_x:float  = _terrain_generator.get_center_x()
+			var surface_y:float = _terrain_generator.get_highest_point_y()
 			target_position = Vector2(center_x, surface_y - 12000.0)
 	
 	# Store target position for camera transition
@@ -1346,7 +1580,7 @@ func _hide_landing_gameplay() -> void:
 
 	# Ensure we are bound to the real generator/tiles before hiding.
 	if terrain_generator_path != NodePath(""):
-		_terrain_generator = get_node_or_null(terrain_generator_path) as TerrainGenerator
+		_terrain_generator = get_node_or_null(terrain_generator_path) as Node
 	if terrain_tiles_controller_path != NodePath(""):
 		_terrain_tiles_controller = get_node_or_null(terrain_tiles_controller_path)
 
@@ -1371,7 +1605,7 @@ func _hide_landing_gameplay() -> void:
 	
 	# Hide terrain
 	if _terrain_generator != null:
-		var terrain_body := _terrain_generator.get_terrain_body()
+		var terrain_body:StaticBody2D = _terrain_generator.get_terrain_body()
 		if terrain_body != null:
 			terrain_body.visible = false
 	
@@ -1402,7 +1636,7 @@ func _show_landing_gameplay() -> void:
 	
 	# Show terrain
 	if _terrain_generator != null:
-		var terrain_body := _terrain_generator.get_terrain_body()
+		var terrain_body:StaticBody2D = _terrain_generator.get_terrain_body()
 		if terrain_body != null:
 			terrain_body.visible = true
 	
@@ -1466,3 +1700,19 @@ func _bind_lander() -> void:
 	# var landers := scene.get_tree().get_nodes_in_group("lander")
 	# if landers.size() > 0:
 	#     _lander = landers[0] as Node2D
+
+func _arm_touchdown_for_current_phase() -> void:
+	_touchdown_armed = false
+	_touchdown_consumed_for_phase = false
+
+	if _current_phase.is_empty():
+		return
+
+	var mode: String = str(_current_phase.get("mode", ""))
+	if mode != "lander":
+		return
+
+	# We only want touchdown processing on descent-like lander phases.
+	var pid: String = str(_current_phase.get("id", ""))
+	if pid.find("descent") != -1 or pid.find("landing") != -1 or pid.find("legacy") != -1:
+		_touchdown_armed = true
