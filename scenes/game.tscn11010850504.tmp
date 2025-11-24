@@ -38,11 +38,14 @@ debug_logging = true
 
 [node name="MissionController" type="Node" parent="Systems"]
 script = ExtResource("2_iywne")
+debug_logging = null
+auto_end_on_all_primary_complete = null
 terrain_generator_path = NodePath("../../World/TerrainGenerator")
 terrain_tiles_controller_path = NodePath("../TerrainTilesController")
 lander_path = NodePath("../../World/Lander")
 hud_path = NodePath("../../UI/LanderHUD")
 orbital_view_path = NodePath("../../OrbitalView")
+mission_data_dir = null
 mission_file_id = "training_mission_01.json"
 
 [node name="MissionGenerator" type="Node" parent="Systems"]
@@ -69,6 +72,7 @@ script = ExtResource("9_trtic")
 
 [node name="GravityFieldManager" type="Node2D" parent="Systems"]
 script = ExtResource("5_ir15t")
+debug_logging = true
 
 [node name="World" type="Node2D" parent="."]
 

@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3 uid="uid://dhwbgfm0d7vpi"]
+[gd_scene load_steps=20 format=3 uid="uid://dhwbgfm0d7vpi"]
 
 [ext_resource type="Script" uid="uid://cqj2hsg7f8ycf" path="res://scripts/game.gd" id="1_yqjtg"]
 [ext_resource type="Script" uid="uid://c5k1dh5ok7a3d" path="res://scripts/systems/mission_controller.gd" id="2_iywne"]
@@ -17,8 +17,6 @@
 [ext_resource type="PackedScene" uid="uid://b3v5xi2iht5kv" path="res://scenes/ui/hq.tscn" id="12_trtic"]
 [ext_resource type="Script" uid="uid://dac1odxjscqoj" path="res://scripts/ui/orbital_camera.gd" id="13_ca42v"]
 [ext_resource type="Script" uid="uid://b6qwot2ywuy7p" path="res://scripts/orbital_view.gd" id="13_rysoc"]
-[ext_resource type="Script" uid="uid://d0lbtyoe4gywb" path="res://scripts/ui/briefing_panel.gd" id="18_264po"]
-[ext_resource type="Script" uid="uid://cxbs5wdb1b8do" path="res://scripts/ui/debrief_panel.gd" id="19_1kice"]
 
 [sub_resource type="Gradient" id="Gradient_kvuet"]
 
@@ -31,14 +29,12 @@ fill_to = Vector2(0.6666667, 0.8803419)
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_yqjtg")
-use_orbital_view = true
-debug_logging = true
 
 [node name="Systems" type="Node" parent="."]
 
 [node name="MissionController" type="Node" parent="Systems"]
 script = ExtResource("2_iywne")
-terrain_generator_path = NodePath("../../World/TerrainGenerator")
+terrain_generator_path = NodePath("../TerrainGenerator")
 terrain_tiles_controller_path = NodePath("../TerrainTilesController")
 lander_path = NodePath("../../World/Lander")
 hud_path = NodePath("../../UI/LanderHUD")
@@ -58,6 +54,12 @@ wind_controller_path = NodePath("../WeatherController")
 
 [node name="WeatherController" type="Node" parent="Systems"]
 
+[node name="TerrainGenerator" type="Node" parent="Systems"]
+script = ExtResource("5_u5sy4")
+terrain_root_path = NodePath("../../World/TerrainRoot")
+terrain_color = Color(0.7080334, 0.83904666, 0.9662736, 1)
+debug_logging = true
+
 [node name="WorldSimManager" type="Node" parent="Systems"]
 script = ExtResource("7_kvpfn")
 
@@ -66,9 +68,27 @@ script = ExtResource("8_kvuet")
 
 [node name="TerrainTilesController" type="Node" parent="Systems"]
 script = ExtResource("9_trtic")
+terrain_generator_path = null
+bg_tiles_layer_path = null
+surface_tiles_layer_path = null
+landing_deco_layer_path = null
+bg_source_id = null
+bg_atlas_coords = null
+surface_source_id = null
+surface_atlas_coords = null
+landing_pad_source_id = null
+landing_pad_atlas_coords = null
+landing_light_source_id = null
+landing_light_atlas_coords = null
+background_height_above_terrain = null
+background_height_below_terrain = null
+surface_detail_density = null
+landing_light_spacing = null
+debug_logging = null
 
 [node name="GravityFieldManager" type="Node2D" parent="Systems"]
 script = ExtResource("5_ir15t")
+debug_logging = true
 
 [node name="World" type="Node2D" parent="."]
 
@@ -107,25 +127,23 @@ star_count = 200
 color_jitter = 0.18
 allow_twinkle = true
 
-[node name="TerrainGenerator" type="Node2D" parent="World"]
+[node name="TerrainRoot" type="Node2D" parent="World"]
 script = ExtResource("5_u5sy4")
 terrain_root_path = NodePath(".")
 terrain_color = Color(0.5788521, 0.66061723, 0.78350806, 1)
-debug_logging = true
 
-[node name="BGTiles" type="TileMapLayer" parent="World/TerrainGenerator"]
+[node name="BGTiles" type="TileMapLayer" parent="World/TerrainRoot"]
 z_index = -10
 
-[node name="SurfaceTiles" type="TileMapLayer" parent="World/TerrainGenerator"]
+[node name="SurfaceTiles" type="TileMapLayer" parent="World/TerrainRoot"]
 z_index = 1
 
-[node name="LandingDecoTiles" type="TileMapLayer" parent="World/TerrainGenerator"]
+[node name="LandingDecoTiles" type="TileMapLayer" parent="World/TerrainRoot"]
 z_index = 2
 
 [node name="Lander" parent="World" instance=ExtResource("9_kvuet")]
 visible = false
 debug_logging = true
-gravity_field_manager_path = NodePath("../../Systems/GravityFieldManager")
 
 [node name="OrbitalView" type="Node2D" parent="."]
 script = ExtResource("13_rysoc")
@@ -138,12 +156,11 @@ script = ExtResource("13_ca42v")
 [node name="LaunchMenu" parent="UI" instance=ExtResource("10_dinhu")]
 
 [node name="HQ" parent="UI" instance=ExtResource("12_trtic")]
-visible = false
 
 [node name="LanderHUD" parent="UI" instance=ExtResource("3_lnu2h")]
 custom_minimum_size = Vector2(230, 260)
 
-[node name="BriefingPanel" type="Control" parent="UI"]
+[node name="DialoguePanel" type="Control" parent="UI"]
 visible = false
 layout_mode = 3
 anchors_preset = 8
@@ -159,9 +176,8 @@ grow_horizontal = 2
 grow_vertical = 2
 size_flags_horizontal = 6
 size_flags_vertical = 6
-script = ExtResource("18_264po")
 
-[node name="TextureRect" type="TextureRect" parent="UI/BriefingPanel"]
+[node name="TextureRect" type="TextureRect" parent="UI/DialoguePanel"]
 modulate = Color(0.20392157, 0.44313726, 0.58431375, 1)
 self_modulate = Color(0.3764706, 0.58431375, 1, 1)
 layout_mode = 1
@@ -172,7 +188,7 @@ grow_horizontal = 2
 grow_vertical = 2
 texture = SubResource("GradientTexture2D_trtic")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="UI/BriefingPanel"]
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/DialoguePanel"]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -187,85 +203,20 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 20
 
-[node name="TitleLabel" type="Label" parent="UI/BriefingPanel/VBoxContainer"]
+[node name="TitleLabel" type="Label" parent="UI/DialoguePanel/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 48
 text = "Mission Title"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="DescriptionLabel" type="Label" parent="UI/BriefingPanel/VBoxContainer"]
+[node name="DescriptionLabel" type="Label" parent="UI/DialoguePanel/VBoxContainer"]
 custom_minimum_size = Vector2(1100, 400)
 layout_mode = 2
 size_flags_horizontal = 4
 
-[node name="LaunchButton" type="Button" parent="UI/BriefingPanel/VBoxContainer"]
+[node name="LaunchButton" type="Button" parent="UI/DialoguePanel/VBoxContainer"]
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 32
 text = "Launch"
-
-[node name="DebriefPanel" type="Control" parent="UI"]
-visible = false
-layout_mode = 3
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -20.0
-offset_top = -20.0
-offset_right = 20.0
-offset_bottom = 20.0
-grow_horizontal = 2
-grow_vertical = 2
-size_flags_horizontal = 6
-size_flags_vertical = 6
-script = ExtResource("19_1kice")
-
-[node name="TextureRect" type="TextureRect" parent="UI/DebriefPanel"]
-modulate = Color(0.20392157, 0.44313726, 0.58431375, 1)
-self_modulate = Color(0.3764706, 0.58431375, 1, 1)
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-texture = SubResource("GradientTexture2D_trtic")
-
-[node name="VBoxContainer" type="VBoxContainer" parent="UI/DebriefPanel"]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -600.0
-offset_top = -280.0
-offset_right = 600.0
-offset_bottom = 280.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 20
-
-[node name="TitleLabel" type="Label" parent="UI/DebriefPanel/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 48
-text = "Mission Title"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="OutcomeLabel" type="Label" parent="UI/DebriefPanel/VBoxContainer"]
-custom_minimum_size = Vector2(1100, 400)
-layout_mode = 2
-size_flags_horizontal = 4
-
-[node name="DetailsRichText" type="RichTextLabel" parent="UI/DebriefPanel/VBoxContainer"]
-layout_mode = 2
-
-[node name="ReturnButton" type="Button" parent="UI/DebriefPanel/VBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 32
-text = "Return to HQ"

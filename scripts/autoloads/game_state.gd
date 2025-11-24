@@ -24,10 +24,13 @@ extends Node
 
 var player_profile: Dictionary = {}
 var world_sim_state: Dictionary = {}
+var current_mission_id:String = ""
+var landing_zone_id:String = ""
 
 # Current mission (set by CareerHub / MissionBriefing / MissionGenerator)
 var current_mission_config: Dictionary = {}
 var current_mission_result: Dictionary = {}
+var last_mission_result: Dictionary = {}
 var _mission_counter: int = 0					# Used to generate simple mission counters if needed
 var training_progress: int = 0					# Training mission progression, 0–3
 var training_complete: bool = false				# Whether the player has unlocked HQ / Mission Board
@@ -35,6 +38,9 @@ var training_complete: bool = false				# Whether the player has unlocked HQ / Mi
 # Mission Board (available missions after training)
 var available_missions: Array = []   # Array[Dictionary] of mission_config
 var max_missions: int = 10           # FIFO capacity
+
+var available_crew_candidates: Array = []
+var store_inventory: Array = []
 
 
 
@@ -218,6 +224,11 @@ func clear_current_mission() -> void:
 # Applying mission results
 # -------------------------------------------------------------------
 
+func _on_mission_completed(result:Dictionary):
+	last_mission_result = result
+
+# TODO: THIS IS DEPRECATED and a DUPLICATE, CLEAN UP EVERYTHING USING THIS
+# MissionController Handles This Now
 func apply_mission_result(result: Dictionary) -> void:
 	##
 	# Applies mission outcome to the player profile, based on the
@@ -269,12 +280,10 @@ func apply_mission_result(result: Dictionary) -> void:
 		_set_career_status("terminated", "player_died")
 
 	# Save profile via SaveSystem (if present)
-	if Engine.has_singleton("SaveSystem"):
-		SaveSystem.save_profile(player_profile)
+	SaveSystem.save_profile(player_profile)
 
 	# Notify listeners
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("mission_result_applied", mission_id, success_state, current_mission_result)
+	EventBus.emit_signal("mission_result_applied", mission_id, success_state, current_mission_result)
 
 
 func _apply_mission_rewards(success_state: String) -> void:

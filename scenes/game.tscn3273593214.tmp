@@ -31,8 +31,6 @@ fill_to = Vector2(0.6666667, 0.8803419)
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_yqjtg")
-use_orbital_view = true
-debug_logging = true
 
 [node name="Systems" type="Node" parent="."]
 
@@ -69,6 +67,7 @@ script = ExtResource("9_trtic")
 
 [node name="GravityFieldManager" type="Node2D" parent="Systems"]
 script = ExtResource("5_ir15t")
+debug_logging = true
 
 [node name="World" type="Node2D" parent="."]
 

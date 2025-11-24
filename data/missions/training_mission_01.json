@@ -1,93 +1,139 @@
 {
   "id": "training_mission_01",
   "display_name": "Training 01 – Soft Landing",
-  "is_training": true,
-  "tier": 0,
+  "category": "tutorial",
+  "difficulty": 1,
+  "recommended_skills": ["landing"],
+  "expires_in_days": null, 
+  "unique": true,
+  "reputation_required": 0,
 
   "environment": {
-	"gravity_scale": 0.8,
 	"gravity": {
-	  "enabled": true,
-	  "strength": 0.8,
-	  "direction_deg": 90.0
+		  "strength": 18.0,
+		  "direction_deg": 90.0
 	},
 	"atmosphere": "thin",
 	"wind_profile_id": "none",
 	"wind_strength_multiplier": 0.0,
 	"visibility": {
-	  "fog_type": "none",
-	  "fog_density": 0.0,
-	  "precipitation_type": "none",
-	  "precipitation_intensity": 0.0,
-	  "allow_reveal_tool": false
+		  "fog_type": "none",
+		  "fog_density": 0.0,
+		  "precipitation_type": "none",
+		  "precipitation_intensity": 0.0,
+		  "allow_reveal_tool": false
 	},
 	"physics_profile_id": "lunar_low_g"
   },
 
   "terrain": {
-	"seed": 0,
-	"length": 10000.0,
-	"segment_length": 32.0,
-	"baseline_y": 600.0,
-	"height_variation": 100.0,
-	"roughness": 0.25,
-	"landing_zones": [
-	  {
-		"id": "training_zone_01",
-		"center_x": 1500.0,
-		"width": 360.0
-	  }
-	]
+		"seed": 0,
+		"length": 10000.0,
+		"segment_length": 32.0,
+		"baseline_y": 600.0,
+		"height_variation": 100.0,
+		"roughness": 0.25,
+		"landing_zones": [
+		  {
+			"id": "training_zone_01",
+			"center_x": 1500.0,
+			"width": 360.0
+		  }
+		]
   },
 
   "spawn": {
-	"start_above_zone_id": "training_zone_01",
-	"height_above_surface": 12000.0,
-	"offset_x": 0.0,
-	"initial_velocity": [0.0, 0.0]
+		"start_above_zone_id": "training_zone_01",
+		"height_above_surface": 12000.0,
+		"offset_x": 0.0,
+		"initial_velocity": [0.0, 0.0]
   },
 
   "mission_modifiers": {
-	"allow_player_override": true,
-	"fuel_capacity_multiplier": 5.0,
-	"thrust_multiplier": 6.0,
-	"rotation_accel_multiplier": 1.0,
-	"max_angular_speed_multiplier": 1.0,
-	"start_fuel_ratio": 1.0
+			"allow_player_override": true,
+			"fuel_capacity_multiplier": 5.0,
+			"thrust_multiplier": 6.0,
+			"rotation_accel_multiplier": 1.0,
+			"max_angular_speed_multiplier": 1.0,
+			"start_fuel_ratio": 1.0
   },
 
   "hud_instruments": {
-	"allow_player_override": true,
-	"show_altitude": true,
-	"show_fuel": true,
-	"show_wind": false,
-	"show_gravity": true,
-	"show_timer": true
+			"allow_player_override": true,
+			"show_altitude": true,
+			"show_fuel": true,
+			"show_wind": false,
+			"show_gravity": true,
+			"show_timer": true
   },
 
   "failure_rules": {
-	"time_limit_seconds": 900.0,
-	"allow_abort": true,
-	"abort_counts_as_failure": false,
-	"hard_fail_on_lander_destroyed": true,
-	"hard_fail_on_player_death": true
+			"time_limit_seconds": 900.0,
+			"allow_abort": true,
+			"abort_counts_as_failure": false,
+			"hard_fail_on_lander_destroyed": true,
+			"hard_fail_on_player_death": true
   },
 
   "objectives": {
-	"primary": [
-	  {
-		"id": "land_safely_anywhere",
-		"description": "Perform a safe landing anywhere on the surface.",
-		"type": "landing",
-		"target_zone_id": "any",
-		"max_impact_speed": 14.0
-	  }
-	],
-	"bonus": []
+                "primary": [
+                          {
+                                "id": "land_safely_anywhere",
+                                "description": "Perform a safe landing anywhere on the surface.",
+                                "type": "landing",
+                                "target_zone_id": "any",
+                                "max_impact_speed": 14.0
+                          },
+          {
+                "id": "return_to_orbit_after_landing",
+                "description": "Climb back to orbit after completing your landing.",
+                "type": "return_to_orbit",
+                "min_altitude": 12000.0
+          }
+        ],
+        "bonus": []
   },
 
   "rewards": {
-	"base_credits": 500,
-	"bonus_credits": 0
+		"base_credits": 500,
+		"bonus_credits": 0
+  },
+
+ "orbital_view": {
+		"enabled": true,
+		"planet_visual": {
+		  "texture_id": "moon_gray",
+		  "radius": 320.0,
+		  "rotation_speed": 0.15,
+		  "color_tint": "#c0c0c0"
+	},
+	"lander_orbit": {
+		  "orbit_radius": 450.0,
+		  "orbit_speed": 0.8,
+		  "show_thrust_on_descent": true
+	},
+	"landing_zones": [
+		  {
+			"id": "training_zone_01",
+			"display_name": "Training Zone Alpha",
+			"icon_type": "flag",
+			"difficulty": "easy",
+			"color": "#00ff00",
+			"angle_deg": 45.0,
+			"description": "Wide, flat landing area."
+		  }
+	],
+	"dialogue": [
+		  {
+			"speaker": "Mission Control",
+			"text": "Welcome to your first landing mission, pilot."
+		  }
+	],
+	"camera_transition": {
+		  "zoom_duration": 2.5,
+		  "zoom_easing": "ease_in_out",
+		  "planet_flatten_start_altitude": 8000.0,
+		  "planet_flatten_end_altitude": 2000.0
+	}
   }
 }

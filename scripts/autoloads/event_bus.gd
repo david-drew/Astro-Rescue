@@ -32,6 +32,17 @@ func _ready() -> void:
 	# You can toggle debug_logging via a debug menu or console later.
 	pass
 
+# -------------------------------------------------------------------
+# UI
+# -------------------------------------------------------------------
+signal new_game_requested
+signal crew_recruit_requested(candidate_id: String)
+signal crew_recruit_succeeded(candidate_id: String)
+signal crew_recruit_failed(candidate_id: String, reason: String)
+signal store_purchase_requested(item_id: String, quantity: int)
+signal store_purchase_succeeded(item_id: String, quantity: int)
+signal store_purchase_failed(item_id: String, reason: String)
+
 
 # -------------------------------------------------------------------
 # Profile / Career signals
@@ -52,11 +63,11 @@ signal career_terminated(reason: String)
 # -------------------------------------------------------------------
 # Unlocks & Progression
 # -------------------------------------------------------------------
-
 signal lander_unlocked(lander_id: String)	# new lander unlocked.
 signal crew_unlocked(crew_id: String)		# new crew member unlocked.
 signal mission_tag_unlocked(tag: String)	# new mission tag is unlocked (gates archetypes/arcs).
 
+signal terrain_generated(terrain_generator:TerrainGenerator)
 
 # -------------------------------------------------------------------
 # Mission lifecycle (config, runtime, results)
@@ -70,6 +81,7 @@ signal mission_cleared()
 
 ## Emitted when a mission is about to start (e.g., when loading a mode scene).
 signal mission_started(mission_id: String)
+signal start_mission_requested(mission_id: String, mission_config: Dictionary)		# TODO: DUPE
 
 ## Emitted when MissionController considers the mission complete (success/partial/fail).
 signal mission_completed(mission_id: String, result: Dictionary)
@@ -84,6 +96,8 @@ signal mission_result_applied(mission_id: String, success_state: String, result:
 ## start the next mission. Debrief should have already called
 ## GameState.apply_mission_result(current_mission_result) before emitting this.
 signal debrief_finished(mission_id: String, result: Dictionary)
+signal briefing_launch_requested
+signal debrief_return_requested
 
 signal time_tick(channel_id: String, dt_game: float, dt_real: float)
 
@@ -94,6 +108,7 @@ signal time_tick(channel_id: String, dt_game: float, dt_real: float)
 # -------------------------------------------------------------------
 signal lander_entered_landing_zone(zone_id: String, zone_info: Dictionary)
 signal lander_exited_landing_zone(zone_id: String, zone_info: Dictionary)
+signal orbit_reached()
 
 ## Emitted on touchdown attempt; success indicates a safe landing according to current thresholds.
 signal touchdown(success: bool, impact_data: Dictionary)

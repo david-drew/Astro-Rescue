@@ -91,7 +91,7 @@ func regenerate_last() -> void:
 func get_landing_zone_world_info(zone_id: String) -> Dictionary:
 	return _landing_zones_info.get(zone_id, {})
 
-# NEW: Public getters for integration with other systems
+# Public getters for integration with other systems
 func get_highest_point_y() -> float:
 	"""Get the Y coordinate of the highest terrain point (for gravity/spawning)"""
 	return _highest_point_y
@@ -781,15 +781,23 @@ func _create_landing_zone_collider(zone_info: Dictionary) -> void:
 
 func _on_landing_zone_body_entered(body: Node2D, zone_id: String, zone_info: Dictionary) -> void:
 
-	if body.is_in_group("lander") or body is LanderController:
-		var impact_data := {}
-		if body.has_method("get_landing_state"):
-			impact_data = body.get_landing_state(self)
-		
-		# Emit with complete data
-		EventBus.emit_signal("touchdown", impact_data)
-		EventBus.emit_signal("lander_entered_landing_zone", zone_id, zone_info)
-		#EventBus.emit_signal("touchdown", zone_id, zone_info)
+        if body.is_in_group("lander") or body is LanderController:
+                var impact_data := {}
+                if body.has_method("get_landing_state"):
+                        impact_data = body.get_landing_state(self, zone_id, zone_info)
+
+                impact_data["landing_zone_id"] = impact_data.get("landing_zone_id", zone_id)
+                impact_data["landing_zone_info"] = impact_data.get("landing_zone_info", zone_info)
+
+                var touchdown_payload := {
+                        "successful": bool(impact_data.get("successful", false)),
+                        "impact_data": impact_data
+                }
+
+                # Emit with complete data
+                EventBus.emit_signal("touchdown", touchdown_payload)
+                EventBus.emit_signal("lander_entered_landing_zone", zone_id, zone_info)
+                #EventBus.emit_signal("touchdown", zone_id, zone_info)
 		
 
 func _on_landing_zone_body_exited(body: Node2D, zone_id: String, zone_info: Dictionary) -> void:

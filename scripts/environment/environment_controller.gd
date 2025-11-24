@@ -67,6 +67,12 @@ func _ready() -> void:
 	_fog_node = get_node_or_null(fog_node_path)
 	_precipitation_node = get_node_or_null(precipitation_node_path)
 
+	if GameState.current_mission_config.is_empty():
+		# Mission not started yet; wait for MissionController.
+		if EventBus.has_signal("mission_started"):
+			EventBus.mission_started.connect(_refresh_from_mission_config)
+		return
+
 	_refresh_from_mission_config()
 
 
@@ -84,16 +90,11 @@ func refresh_from_mission_config() -> void:
 func get_environment_state() -> Dictionary:
 	return _environment_state.duplicate(true)
 
-
 # -------------------------------------------------------------------
 # Core logic
 # -------------------------------------------------------------------
 
-func _refresh_from_mission_config() -> void:
-	if not Engine.has_singleton("GameState"):
-		push_warning("EnvironmentController: GameState singleton not found; cannot read environment.")
-		return
-
+func _refresh_from_mission_config(mission_id:String="") -> void:
 	var mission_config: Dictionary = GameState.current_mission_config
 	if mission_config.is_empty():
 		push_warning("EnvironmentController: current_mission_config is empty.")
@@ -145,10 +146,9 @@ func _apply_gravity() -> void:
 				new_gravity_mag, " (vector=", gravity_vector, ")")
 
 	# Broadcast custom gravity vector via EventBus so controllers can apply it manually.
-	if Engine.has_singleton("EventBus"):
-		if debug_logging:
-			print("[EnvironmentController] Emitting gravity_changed: ", gravity_vector)
-		EventBus.emit_signal("gravity_changed", gravity_vector)
+	if debug_logging:
+		print("[EnvironmentController] Emitting gravity_changed: ", gravity_vector)
+	EventBus.emit_signal("gravity_changed", gravity_vector)
 
 
 func _apply_wind() -> void:
@@ -167,8 +167,7 @@ func _apply_wind() -> void:
 		# If none of these methods exist, we silently ignore.
 
 	# Broadcast via EventBus so any system (e.g., particles, camera shake) can listen.
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("wind_profile_changed", wind_profile_id)
+	EventBus.emit_signal("wind_profile_changed", wind_profile_id)
 
 
 func _apply_visibility() -> void:
@@ -204,12 +203,11 @@ func _apply_visibility() -> void:
 				ci2.visible = precip_type != "none" and precip_intensity > 0.0
 
 	# Broadcast via EventBus so HUD or other systems can react (icons, warnings, etc.).
-	if Engine.has_singleton("EventBus"):
-		var visibility_state: Dictionary = {
-			"fog_type": fog_type,
-			"fog_density": fog_density,
-			"precipitation_type": precip_type,
-			"precipitation_intensity": precip_intensity,
-			"allow_reveal_tool": allow_reveal_tool
-		}
-		EventBus.emit_signal("visibility_changed", visibility_state)
+	var visibility_state: Dictionary = {
+		"fog_type": fog_type,
+		"fog_density": fog_density,
+		"precipitation_type": precip_type,
+		"precipitation_intensity": precip_intensity,
+		"allow_reveal_tool": allow_reveal_tool
+	}
+	EventBus.emit_signal("visibility_changed", visibility_state)

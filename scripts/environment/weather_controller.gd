@@ -136,8 +136,7 @@ func set_wind_profile(profile_id: String, strength_multiplier: float = 1.0) -> v
 			" strength_multiplier=", strength_multiplier,
 			" base_vector=", _base_wind_vector)
 
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("wind_profile_changed", profile_id)
+	EventBus.emit_signal("wind_profile_changed", profile_id)
 
 
 func apply_environment_wind(environment_state: Dictionary) -> void:
@@ -169,8 +168,7 @@ func start_meteor_shower(duration: float, params: Dictionary = {}) -> void:
 			" params=", _current_meteor_params)
 
 	emit_signal("meteor_shower_started", _current_meteor_params)
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("meteor_shower_started", _current_meteor_params)
+	EventBus.emit_signal("meteor_shower_started", _current_meteor_params)
 
 	if _meteor_spawner != null and _meteor_spawner.has_method("start_meteor_shower"):
 		_meteor_spawner.call("start_meteor_shower", _current_meteor_params)
@@ -198,10 +196,9 @@ func _fetch_wind_profile(profile_id: String) -> Dictionary:
 			return profile
 
 	# Fallback: use DataManager autoload if present
-	if Engine.has_singleton("DataManager"):
-		var dm_profile: Dictionary = DataManager.get_wind_profile(profile_id)
-		if dm_profile.size() > 0:
-			return dm_profile
+	var dm_profile: Dictionary = DataManager.get_wind_profile(profile_id)
+	if dm_profile.size() > 0:
+		return dm_profile
 
 	if debug_logging:
 		print("[WeatherController] Warning: wind profile '", profile_id,
@@ -335,8 +332,7 @@ func _emit_gust_warning() -> void:
 			" approx_factor=", approx_factor)
 
 	emit_signal("wind_gust_warning", direction_deg, approx_factor)
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("wind_gust_warning", direction_deg, approx_factor)
+	EventBus.emit_signal("wind_gust_warning", direction_deg, approx_factor)
 
 
 func _update_wind_signals(delta: float) -> void:
@@ -348,8 +344,7 @@ func _update_wind_signals(delta: float) -> void:
 		_wind_signal_accumulator -= _wind_signal_interval
 
 		emit_signal("wind_vector_changed", _current_wind_vector)
-		if Engine.has_singleton("EventBus"):
-			EventBus.emit_signal("wind_vector_changed", _current_wind_vector)
+		EventBus.emit_signal("wind_vector_changed", _current_wind_vector)
 
 # -------------------------------------------------------------------
 # Meteor showers internals
@@ -383,8 +378,7 @@ func _end_meteor_shower_internal() -> void:
 	_meteor_shower_time_remaining = 0.0
 
 	emit_signal("meteor_shower_ended")
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("meteor_shower_ended")
+	EventBus.emit_signal("meteor_shower_ended")
 
 	if _meteor_spawner != null and _meteor_spawner.has_method("end_meteor_shower"):
 		_meteor_spawner.call("end_meteor_shower")
