@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3 uid="uid://dhwbgfm0d7vpi"]
+[gd_scene load_steps=26 format=3 uid="uid://dhwbgfm0d7vpi"]
 
 [ext_resource type="Script" uid="uid://cqj2hsg7f8ycf" path="res://scripts/game.gd" id="1_yqjtg"]
 [ext_resource type="Script" uid="uid://c5k1dh5ok7a3d" path="res://scripts/systems/mission_controller.gd" id="2_iywne"]
@@ -21,19 +21,8 @@
 [ext_resource type="Script" uid="uid://dwv7thkegjgmv" path="res://scripts/actors/vehicle_eva.gd" id="14_5newe"]
 [ext_resource type="Script" uid="uid://llbywr7c72h6" path="res://scripts/actors/vehicle_buggy.gd" id="14_37s47"]
 [ext_resource type="Script" uid="uid://d34qoorinjw64" path="res://scripts/actors/vehicle_lander.gd" id="14_bt5mj"]
-[ext_resource type="Texture2D" uid="uid://ck6yjbnwghqyd" path="res://assets/images/moon_buggy_01.png" id="16_e1j6l"]
 [ext_resource type="Script" uid="uid://d0lbtyoe4gywb" path="res://scripts/ui/briefing_panel.gd" id="18_264po"]
-[ext_resource type="Texture2D" uid="uid://b77h8ypucmvjl" path="res://assets/images/eva_01.png" id="18_pl11u"]
 [ext_resource type="Script" uid="uid://cxbs5wdb1b8do" path="res://scripts/ui/debrief_panel.gd" id="19_1kice"]
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_pl11u"]
-size = Vector2(133, 36)
-
-[sub_resource type="CircleShape2D" id="CircleShape2D_bhx41"]
-radius = 17.029387
-
-[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_qnb83"]
-height = 58.0
 
 [sub_resource type="Gradient" id="Gradient_kvuet"]
 
@@ -142,41 +131,50 @@ z_index = 2
 script = ExtResource("13_1kice")
 
 [node name="VehicleLander" parent="World/Player" instance=ExtResource("9_kvuet")]
+visible = false
 script = ExtResource("14_bt5mj")
 base_thrust_force = 200.0
+turbo_thrust_multiplier = 1.8
+allow_turbo = true
+fuel_capacity = 100.0
 base_fuel_burn_rate = 12.0
-gravity_field_manager_path = NodePath("../../../Systems/GravityFieldManager")
+turbo_fuel_multiplier = 2.5
+rotation_accel = 6.0
+max_angular_speed = 4.5
+rotation_drag = 6.0
+safe_vertical_speed = 30.0
+safe_horizontal_speed = 25.0
+safe_tilt_deg = 20.0
+safe_upright_check_duration = 1.5
+destroy_vertical_speed = 40.0
+destroy_horizontal_speed = 40.0
+destroy_velocity_magnitude = 40.0
+hard_crash_always_fatal = true
+upright_angle_limit_for_check = 25.0
+debug_logging = false
+weather_controller_path = NodePath("")
+wind_force_scale = 1.0
+altitude_reference_y = 0.0
+pixels_per_meter = 16.0
+use_altitude_gravity = true
+gravity_field_manager_path = NodePath("/root/GravityFieldManager")
+hud_update_enabled = true
+hud_update_interval_frames = 20
+altitude_change_threshold = 5.0
 
 [node name="VehicleBuggy" type="CharacterBody2D" parent="World/Player"]
-visible = false
 script = ExtResource("14_37s47")
 
 [node name="Sprite2D" type="Sprite2D" parent="World/Player/VehicleBuggy"]
-scale = Vector2(0.5, 0.5)
-texture = ExtResource("16_e1j6l")
 
-[node name="BodyCollider" type="CollisionShape2D" parent="World/Player/VehicleBuggy"]
-position = Vector2(-2.5, -6)
-shape = SubResource("RectangleShape2D_pl11u")
-
-[node name="WheelFrontCollider" type="CollisionShape2D" parent="World/Player/VehicleBuggy"]
-position = Vector2(57, 18)
-shape = SubResource("CircleShape2D_bhx41")
-
-[node name="WheelBackCollider" type="CollisionShape2D" parent="World/Player/VehicleBuggy"]
-position = Vector2(-47, 18)
-shape = SubResource("CircleShape2D_bhx41")
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Player/VehicleBuggy"]
 
 [node name="VehicleEVA" type="CharacterBody2D" parent="World/Player"]
-visible = false
 script = ExtResource("14_5newe")
 
 [node name="Sprite2D" type="Sprite2D" parent="World/Player/VehicleEVA"]
-scale = Vector2(0.25, 0.25)
-texture = ExtResource("18_pl11u")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="World/Player/VehicleEVA"]
-shape = SubResource("CapsuleShape2D_qnb83")
 
 [node name="OrbitalView" type="Node2D" parent="."]
 script = ExtResource("13_rysoc")

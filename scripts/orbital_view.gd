@@ -543,7 +543,7 @@ func _activate_lander_camera() -> void:
 
 	# 2. Enable the Lander’s camera
 	#var _woild = get_node_or_null("/root/Game/World")
-	var _lander = get_node_or_null("/root/Game/World/Lander")
+	var _lander = get_node_or_null("/root/Game/World/Player/VehicleLander")
 	if _lander:
 		var lander_cam := _lander.get_node_or_null("LanderCam")
 		if lander_cam:

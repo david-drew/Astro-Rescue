@@ -68,6 +68,10 @@ signal crew_unlocked(crew_id: String)		# new crew member unlocked.
 signal mission_tag_unlocked(tag: String)	# new mission tag is unlocked (gates archetypes/arcs).
 
 signal terrain_generated(terrain_generator:Node)
+signal poi_entered(poi_id: String, poi_info: Dictionary)
+signal poi_exited(poi_id: String, poi_info: Dictionary)
+signal eva_interacted(target_id: String)
+signal set_vehicle_mode(vehicle: String)
 
 # -------------------------------------------------------------------
 # Mission lifecycle (config, runtime, results)

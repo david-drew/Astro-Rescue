@@ -69,7 +69,6 @@ func _connect_eventbus() -> void:
 	if not eb.is_connected("mission_failed", Callable(self, "_on_mission_failed")):
 		eb.connect("mission_failed", Callable(self, "_on_mission_failed"))
 
-
 	# OrbitalView direct signals (from the node itself)
 	# We only connect if the node exists.
 	if orbital_view:
@@ -272,3 +271,4 @@ func _on_mission_failed(mission_id: String, reason: String, result: Dictionary) 
 
 	# Flow: Mission -> Debrief (fail variant)
 	_enter_debrief()
+

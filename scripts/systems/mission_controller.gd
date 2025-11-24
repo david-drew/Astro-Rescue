@@ -103,6 +103,11 @@ var _active_bonus_objectives: Array = [] # optional; if you decide to support pe
 var _uses_v1_4_phases: bool = true
 
 
+var _current_poi_inside: String = ""
+var _previous_landing_site_pos: Vector2 = Vector2.ZERO
+var _previous_landing_site_valid: bool = false
+
+
 # -------------------------------------------------------------------
 # Lifecycle
 # -------------------------------------------------------------------
@@ -153,6 +158,11 @@ func _ready() -> void:
 
 	if lander_path != NodePath(""):
 		_lander = get_node_or_null(lander_path)
+		print("\t................MC Ready: Trying Lander..............")
+		if _lander == null:
+			print("\t................MC Ready: BAD Lander..............")
+		else:
+			print("\t................MC Ready: GOOD Lander..............")
 
 	if hud_path != NodePath(""):
 		_hud = get_node_or_null(hud_path)
@@ -171,6 +181,7 @@ func _process(delta: float) -> void:
 		return
 
 	_mission_elapsed_time += delta
+	_tick_phase_objectives(delta)
 	_update_hud_timer()
 
 
@@ -539,14 +550,24 @@ func _connect_eventbus_signals() -> void:
 	if not eb.is_connected("lander_destroyed", Callable(self, "_on_lander_destroyed")):
 		eb.connect("lander_destroyed", Callable(self, "_on_lander_destroyed"))
 
-		if not eb.is_connected("fuel_changed", Callable(self, "_on_fuel_changed")):
-				eb.connect("fuel_changed", Callable(self, "_on_fuel_changed"))
+	if not eb.is_connected("fuel_changed", Callable(self, "_on_fuel_changed")):
+		eb.connect("fuel_changed", Callable(self, "_on_fuel_changed"))
 
-		if eb.has_signal("lander_altitude_changed") and not eb.is_connected("lander_altitude_changed", Callable(self, "_on_lander_altitude_changed")):
-				eb.connect("lander_altitude_changed", Callable(self, "_on_lander_altitude_changed"))
+	if eb.has_signal("lander_altitude_changed") and not eb.is_connected("lander_altitude_changed", Callable(self, "_on_lander_altitude_changed")):
+		eb.connect("lander_altitude_changed", Callable(self, "_on_lander_altitude_changed"))
 
 	if not eb.is_connected("player_died", Callable(self, "_on_player_died")):
 		eb.connect("player_died", Callable(self, "_on_player_died"))
+
+	if not EventBus.is_connected("poi_entered", Callable(self, "_on_poi_entered")):
+		EventBus.connect("poi_entered", Callable(self, "_on_poi_entered"))
+
+	if not EventBus.is_connected("poi_exited", Callable(self, "_on_poi_exited")):
+		EventBus.connect("poi_exited", Callable(self, "_on_poi_exited"))
+
+	if not EventBus.is_connected("eva_interacted", Callable(self, "_on_eva_interacted")):
+		EventBus.connect("eva_interacted", Callable(self, "_on_eva_interacted"))
+
 
 	# You can connect to TimeManager's tick if desired.
 	#var tm = TimeManager.new()
@@ -626,6 +647,8 @@ func prepare_mission() -> void:
 	_hide_landing_gameplay()
 	
 	_mission_prepared = true
+
+	EventBus.emit_signal("set_vehicle_mode", "lander")
 	
 	# Branch based on orbital view usage
 	# Start with OV = required to run OrbitalView
@@ -760,6 +783,8 @@ func _on_touchdown(touchdown_data: Dictionary) -> void:
 		_crashes_count += 1
 	else:
 		_landing_successful = true
+		_store_previous_landing_site(impact_data)
+
 
 	# Always evaluate landing-related objectives on touchdown
 	_evaluate_landing_objectives(eval_impact_data, success)
@@ -925,6 +950,98 @@ func _on_mission_timer_timeout() -> void:
 	# Any remaining primary objectives are failed by time limit.
 	_force_fail_all_pending_primary("time_limit")
 	_end_mission("fail", "time_limit_exceeded")
+
+func _on_poi_entered(poi_id: String, poi_info: Dictionary) -> void:
+	if _mission_state != "running":
+		return
+
+	_current_poi_inside = poi_id
+
+	# Complete reach_poi objectives in active phase
+	for obj in _active_objectives:
+		if obj.get("status", "pending") != "pending":
+			continue
+		if obj.get("type", "") != "reach_poi":
+			continue
+
+		var target_id: String = str(_get_obj_param(obj, "poi_id", ""))
+		if target_id != "" and target_id == poi_id:
+			obj["status"] = "completed"
+			if debug_logging:
+				print("[MissionController] Objective completed: reach_poi id=", obj.get("id", ""))
+
+	# Phase completion rule: reached_poi
+	_check_phase_completion_from_poi(poi_id)
+
+
+func _on_poi_exited(poi_id: String, poi_info: Dictionary) -> void:
+	if _current_poi_inside == poi_id:
+		_current_poi_inside = ""
+
+
+func _check_phase_completion_from_poi(poi_id: String) -> void:
+	if not _uses_v1_4_phases:
+		return
+	if _current_phase.is_empty():
+		return
+
+	var comp: Dictionary = _current_phase.get("completion", {})
+	var ctype: String = str(comp.get("type", ""))
+
+	if ctype != "reached_poi":
+		return
+
+	var target_id: String = str(comp.get("poi_id", ""))
+	if target_id == "" or target_id != poi_id:
+		return
+
+	if debug_logging:
+		print("[MissionController] Phase complete on POI arrival. Advancing from phase ", _current_phase_index)
+
+	_advance_phase()
+
+func _on_eva_interacted(target_id: String) -> void:
+	if _mission_state != "running":
+		return
+
+	# Complete rescue_interact objectives
+	for obj in _active_objectives:
+		if obj.get("status", "pending") != "pending":
+			continue
+		if obj.get("type", "") != "rescue_interact":
+			continue
+
+		var t: String = str(_get_obj_param(obj, "target_id", ""))
+		if t == "" or t != target_id:
+			continue
+
+		# If you want timed interaction, we can add progress tracking.
+		# For now, complete on interact event.
+		obj["status"] = "completed"
+		if debug_logging:
+			print("[MissionController] Objective completed: rescue_interact id=", obj.get("id", ""))
+
+	_check_phase_completion_from_rescue(target_id)
+
+
+func _check_phase_completion_from_rescue(target_id: String) -> void:
+	if not _uses_v1_4_phases:
+		return
+
+	var comp: Dictionary = _current_phase.get("completion", {})
+	var ctype: String = str(comp.get("type", ""))
+
+	if ctype != "rescued_target":
+		return
+
+	var t: String = str(comp.get("target_id", ""))
+	if t == "" or t != target_id:
+		return
+
+	if debug_logging:
+		print("[MissionController] Phase complete on rescue target.")
+	_advance_phase()
+
 
 # -------------------------------------------------------------------
 # Objective evaluation
@@ -1716,3 +1833,85 @@ func _arm_touchdown_for_current_phase() -> void:
 	var pid: String = str(_current_phase.get("id", ""))
 	if pid.find("descent") != -1 or pid.find("landing") != -1 or pid.find("legacy") != -1:
 		_touchdown_armed = true
+
+func _store_previous_landing_site(impact_data: Dictionary) -> void:
+	# Try to get a reliable position from impact_data first
+	if impact_data.has("position"):
+		var p = impact_data.get("position")
+		if typeof(p) == TYPE_VECTOR2:
+			_previous_landing_site_pos = p
+			_previous_landing_site_valid = true
+			return
+
+	# Fallback: read from lander node by group
+	var landers := get_tree().get_nodes_in_group("lander")
+	if not landers.is_empty():
+		var lander: Node2D = landers[0]
+		_previous_landing_site_pos = lander.global_position
+		_previous_landing_site_valid = true
+
+func _tick_phase_objectives(delta: float) -> void:
+	if not _uses_v1_4_phases:
+		return
+	if _current_phase.is_empty():
+		return
+
+	var mode: String = str(_current_phase.get("mode", ""))
+	if mode == "buggy":
+		_check_reach_previous_landing_site()
+
+func _check_reach_previous_landing_site() -> void:
+	if not _previous_landing_site_valid:
+		return
+
+	# Find pending reach_previous_landing_site objective and its radius
+	var radius: float = 0.0
+	var has_obj: bool = false
+
+	for obj in _active_objectives:
+		if obj.get("status", "pending") != "pending":
+			continue
+		if obj.get("type", "") != "reach_previous_landing_site":
+			continue
+
+		radius = float(_get_obj_param(obj, "arrival_radius", 140.0))
+		has_obj = true
+
+	if not has_obj:
+		return
+
+	# Get the buggy node.
+	# Your VehicleBuggy should add itself to group "buggy" on ready.
+	var buggies := get_tree().get_nodes_in_group("buggy")
+	if buggies.is_empty():
+		return
+
+	var buggy: Node2D = buggies[0]
+	var dist: float = buggy.global_position.distance_to(_previous_landing_site_pos)
+
+	if dist > radius:
+		return
+
+	# Complete all matching objectives
+	for obj2 in _active_objectives:
+		if obj2.get("status", "pending") != "pending":
+			continue
+		if obj2.get("type", "") != "reach_previous_landing_site":
+			continue
+		obj2["status"] = "completed"
+		if debug_logging:
+			print("[MissionController] Objective completed: reach_previous_landing_site id=", obj2.get("id", ""))
+
+	# If phase completion expects this, advance
+	_check_phase_completion_from_previous_landing_site()
+
+func _check_phase_completion_from_previous_landing_site() -> void:
+	var comp: Dictionary = _current_phase.get("completion", {})
+	var ctype: String = str(comp.get("type", ""))
+
+	if ctype != "reached_previous_landing_site":
+		return
+
+	if debug_logging:
+		print("[MissionController] Phase complete on return to previous landing site.")
+	_advance_phase()

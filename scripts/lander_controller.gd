@@ -137,7 +137,7 @@ func _ready() -> void:
 			# Try to create one if it doesn't exist
 			var gfm = GravityFieldManager.new()
 			gfm.name = "GravityFieldManager"
-			get_tree().root.add_child(gfm)
+			get_tree().root.add_child.call_deferred(gfm)
 			_gravity_field_manager = gfm
 			print("[LanderController] Created new GravityFieldManager instance")
 
