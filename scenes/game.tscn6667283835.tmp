@@ -17,7 +17,7 @@
 [ext_resource type="PackedScene" uid="uid://b3v5xi2iht5kv" path="res://scenes/ui/hq.tscn" id="12_trtic"]
 [ext_resource type="Script" uid="uid://dr8he4hddc0tr" path="res://scripts/actors/player.gd" id="13_1kice"]
 [ext_resource type="Script" uid="uid://dac1odxjscqoj" path="res://scripts/ui/orbital_camera.gd" id="13_ca42v"]
-[ext_resource type="Script" uid="uid://qe4hfmcivu5o" path="res://scripts/ui/orbital_view.gd" id="13_rysoc"]
+[ext_resource type="Script" uid="uid://b6qwot2ywuy7p" path="res://scripts/orbital_view.gd" id="13_rysoc"]
 [ext_resource type="Script" uid="uid://dwv7thkegjgmv" path="res://scripts/actors/vehicle_eva.gd" id="14_5newe"]
 [ext_resource type="Script" uid="uid://llbywr7c72h6" path="res://scripts/actors/vehicle_buggy.gd" id="14_37s47"]
 [ext_resource type="Script" uid="uid://d34qoorinjw64" path="res://scripts/actors/vehicle_lander.gd" id="14_bt5mj"]
@@ -54,6 +54,7 @@ debug_logging = true
 [node name="MissionController" type="Node" parent="Systems"]
 script = ExtResource("2_iywne")
 terrain_generator_path = NodePath("../../World/TerrainGenerator")
+terrain_tiles_controller_path = NodePath("../TerrainTilesController")
 lander_path = NodePath("../../World/Player/VehicleLander")
 hud_path = NodePath("../../UI/LanderHUD")
 orbital_view_path = NodePath("../../OrbitalView")

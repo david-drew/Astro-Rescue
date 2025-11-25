@@ -51,14 +51,26 @@ func _ready() -> void:
 	player_profile = _create_default_profile()
 	
 	var player_node:Node2D = get_node_or_null("/root/Game/World/Player")
-	var eva:Array = get_tree().get_nodes_in_group("eva")
-	var lander:Array = get_tree().get_nodes_in_group("lander")
+	var evas:Array = get_tree().get_nodes_in_group("eva")
+	var landers:Array = get_tree().get_nodes_in_group("lander")
 	var buggies:Array = get_tree().get_nodes_in_group("buggy")
 	
+	if evas.is_empty():
+		vehicles.eva = get_node_or_null("/root/Game/World/Player/VehicleEVA")
+	else:
+		vehicles.eva = evas[0]
+
+	if landers.is_empty():
+		vehicles.lander = get_node_or_null("/root/Game/World/Player/VehicleLander")
+	else:
+		vehicles.eva = landers[0]
+
+	if buggies.is_empty():
+		vehicles.lander = get_node_or_null("/root/Game/World/Player/VehicleBuggy")
+	else:
+		vehicles.buggy = buggies[0]
+
 	player = player_node
-	vehicles.eva = eva[0]
-	vehicles.lander = lander[0]
-	vehicles.buggy = buggies[0]
 
 # -------------------------------------------------------------------
 # Profile lifecycle
@@ -83,22 +95,22 @@ func _create_default_profile() -> Dictionary:
 
 
 func reset_profile() -> void:
-        ##
-        # Resets the current profile to default values (e.g., new career).
-        ##
-        player_profile = _create_default_profile()
-        _mission_counter = 0
-        current_mission_id = ""
-        landing_zone_id = ""
-        current_mission_config.clear()
-        current_mission_result.clear()
-        last_mission_result.clear()
-        available_missions.clear()
-        training_progress = 0
-        training_complete = false
+		##
+		# Resets the current profile to default values (e.g., new career).
+		##
+		player_profile = _create_default_profile()
+		_mission_counter = 0
+		current_mission_id = ""
+		landing_zone_id = ""
+		current_mission_config.clear()
+		current_mission_result.clear()
+		last_mission_result.clear()
+		available_missions.clear()
+		training_progress = 0
+		training_complete = false
 
-        if Engine.has_singleton("EventBus"):
-                EventBus.emit_signal("profile_reset", player_profile)
+		if Engine.has_singleton("EventBus"):
+				EventBus.emit_signal("profile_reset", player_profile)
 
 
 func load_profile_from_save(profile_data: Dictionary) -> void:
