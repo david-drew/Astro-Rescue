@@ -21,7 +21,8 @@ var _current_mode: GameMode = GameMode.LAUNCH_MENU
 @onready var systems: Node            = $Systems
 @onready var mission_controller: Node = $Systems/MissionController
 @onready var world: Node2D            = $World
-@onready var orbital_view: Node2D     = $OrbitalView 
+@onready var orbital_view: Node2D     = $OrbitalView
+@onready var player: Player           = $World/Player
 
 @onready var ui_root: CanvasLayer     = $UI
 @onready var launch_menu: Control     = $UI/LaunchMenu
@@ -100,9 +101,9 @@ func _set_mode(new_mode: GameMode) -> void:
 
 
 func _apply_mode_visibility() -> void:
-	# Hide everything first, then enable exactly what we want.
-	launch_menu.visible = false
-	hq_panel.visible = false
+        # Hide everything first, then enable exactly what we want.
+        launch_menu.visible = false
+        hq_panel.visible = false
 	briefing_panel.visible = false
 	if orbital_view:
 		orbital_view.visible = false
@@ -127,9 +128,13 @@ func _apply_mode_visibility() -> void:
 		if orbital_view:
 			orbital_view.visible = true
 
-	if _current_mode == GameMode.MISSION_RUNNING:
-		lander_hud.visible = true
-		world.visible = true
+        if _current_mode == GameMode.MISSION_RUNNING:
+                lander_hud.visible = true
+                world.visible = true
+
+        if _current_mode != GameMode.MISSION_RUNNING:
+                if player:
+                        player.enter_hq()
 
 	if _current_mode == GameMode.DEBRIEF:
 		if debrief_panel:
