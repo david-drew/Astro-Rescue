@@ -51,14 +51,26 @@ func _ready() -> void:
 	player_profile = _create_default_profile()
 	
 	var player_node:Node2D = get_node_or_null("/root/Game/World/Player")
-	var eva:Array = get_tree().get_nodes_in_group("eva")
-	var lander:Array = get_tree().get_nodes_in_group("lander")
+	var evas:Array = get_tree().get_nodes_in_group("eva")
+	var landers:Array = get_tree().get_nodes_in_group("lander")
 	var buggies:Array = get_tree().get_nodes_in_group("buggy")
 	
+	if evas.is_empty():
+		vehicles.eva = get_node_or_null("/root/Game/World/Player/VehicleEVA")
+	else:
+		vehicles.eva = evas[0]
+
+	if landers.is_empty():
+		vehicles.lander = get_node_or_null("/root/Game/World/Player/VehicleLander")
+	else:
+		vehicles.eva = landers[0]
+
+	if buggies.is_empty():
+		vehicles.lander = get_node_or_null("/root/Game/World/Player/VehicleBuggy")
+	else:
+		vehicles.buggy = buggies[0]
+
 	player = player_node
-	vehicles.eva = eva[0]
-	vehicles.lander = lander[0]
-	vehicles.buggy = buggies[0]
 
 # -------------------------------------------------------------------
 # Profile lifecycle

@@ -1,10 +1,10 @@
 [gd_scene load_steps=31 format=3 uid="uid://dhwbgfm0d7vpi"]
 
 [ext_resource type="Script" uid="uid://cqj2hsg7f8ycf" path="res://scripts/game.gd" id="1_yqjtg"]
-[ext_resource type="Script" uid="uid://c5k1dh5ok7a3d" path="res://scripts/missions/mission_controller.gd" id="2_iywne"]
+[ext_resource type="Script" uid="uid://c5k1dh5ok7a3d" path="res://scripts/systems/mission_controller.gd" id="2_iywne"]
 [ext_resource type="Script" uid="uid://g14ia5c1b88u" path="res://scripts/environment/environment_controller.gd" id="2_lnu2h"]
 [ext_resource type="PackedScene" uid="uid://bdgb0ypkjrnjf" path="res://scenes/ui/lander_hud.tscn" id="3_lnu2h"]
-[ext_resource type="Script" uid="uid://cmax4i8cxq0bs" path="res://scripts/missions/mission_generator.gd" id="3_p57ef"]
+[ext_resource type="Script" uid="uid://cmax4i8cxq0bs" path="res://scripts/systems/mission_generator.gd" id="3_p57ef"]
 [ext_resource type="Script" uid="uid://djwu11yaup5w4" path="res://scripts/systems/time_manager.gd" id="4_vtaks"]
 [ext_resource type="Script" uid="uid://dpmne3xck4w6u" path="res://scripts/systems/gravity_field_manager.gd" id="5_ir15t"]
 [ext_resource type="Script" uid="uid://d2oejgl6y8no6" path="res://scripts/systems/terrain_generator.gd" id="5_u5sy4"]
@@ -17,7 +17,7 @@
 [ext_resource type="PackedScene" uid="uid://b3v5xi2iht5kv" path="res://scenes/ui/hq.tscn" id="12_trtic"]
 [ext_resource type="Script" uid="uid://dr8he4hddc0tr" path="res://scripts/actors/player.gd" id="13_1kice"]
 [ext_resource type="Script" uid="uid://dac1odxjscqoj" path="res://scripts/ui/orbital_camera.gd" id="13_ca42v"]
-[ext_resource type="Script" uid="uid://qe4hfmcivu5o" path="res://scripts/ui/orbital_view.gd" id="13_rysoc"]
+[ext_resource type="Script" uid="uid://b6qwot2ywuy7p" path="res://scripts/orbital_view.gd" id="13_rysoc"]
 [ext_resource type="Script" uid="uid://dwv7thkegjgmv" path="res://scripts/actors/vehicle_eva.gd" id="14_5newe"]
 [ext_resource type="Script" uid="uid://llbywr7c72h6" path="res://scripts/actors/vehicle_buggy.gd" id="14_37s47"]
 [ext_resource type="Script" uid="uid://d34qoorinjw64" path="res://scripts/actors/vehicle_lander.gd" id="14_bt5mj"]
@@ -53,7 +53,9 @@ debug_logging = true
 
 [node name="MissionController" type="Node" parent="Systems"]
 script = ExtResource("2_iywne")
+debug_logging = true
 terrain_generator_path = NodePath("../../World/TerrainGenerator")
+terrain_tiles_controller_path = NodePath("../TerrainTilesController")
 lander_path = NodePath("../../World/Player/VehicleLander")
 hud_path = NodePath("../../UI/LanderHUD")
 orbital_view_path = NodePath("../../OrbitalView")

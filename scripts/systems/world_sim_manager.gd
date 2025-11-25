@@ -281,6 +281,43 @@ func get_mission_config(mission_id: String) -> Dictionary:
 
         return MissionRegistry.get_mission_config(mission_id)
 
+func resolve_mission_id_for_launch(game_state: GameState) -> String:
+	##
+	# Determines which mission should launch based on current GameState.
+	# Priority:
+	#   1) Explicit mission_id already chosen (e.g., Mission Board → GameState.current_mission_id).
+	#   2) Training flow for new campaigns (uses get_next_training_mission_id()).
+	#   3) Return "" if no mission can be resolved.
+	##
+	if game_state == null:
+		push_warning("WorldSimManager.resolve_mission_id_for_launch: GameState is null")
+		return ""
+
+	var explicit_id: String = str(game_state.current_mission_id)
+	if explicit_id != "":
+		return explicit_id
+
+	var training_done: bool = bool(game_state.training_complete)
+	var training_progress: int = int(game_state.training_progress)
+
+	if not training_done or training_progress < 3:
+		var next_training: String = get_next_training_mission_id()
+		if next_training != "":
+			return next_training
+
+	return ""
+
+func get_mission_config(mission_id: String) -> Dictionary:
+	# Thin wrapper over MissionRegistry for mission configs.
+	if mission_id == "":
+		return {}
+
+	if not Engine.has_singleton("MissionRegistry"):
+		push_warning("WorldSimManager.get_mission_config: MissionRegistry singleton missing")
+		return {}
+
+	return MissionRegistry.get_mission_config(mission_id)
+
 func get_available_training_missions() -> Array:
         # Returns Array[Dictionary] of tutorial mission configs.
         # Primary source: MissionRegistry (category == "tutorial").

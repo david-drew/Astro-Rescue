@@ -28,6 +28,8 @@ var mission_elapsed_time: float = 0.0
 var mission_id:String = ""
 var mission_config:Dictionary = {}
 
+var WSM:WorldSimManager = WorldSimManager.new()
+
 func refresh_scene_refs(scene: Node) -> void:
 	terrain_generator = null
 	terrain_tiles_controller = null
@@ -94,17 +96,17 @@ func _load_mission_config() -> void:
 	# 1) Decide which mission we’re playing
 	if mission_id == "":
 		# Training path / new game: ask WorldSim which training mission is next
-		if _is_training:
-			mission_id = WorldSimManager.get_next_training_mission_id()
+		if ! GameState.training_complete:
+			mission_id = WSM.get_next_training_mission_id()
 		else:
 			push_warning("[MissionController] _mission_id is empty and mission is not marked training.")
 			return
 
 	# 2) Fetch config from WorldSim / MissionRegistry
-	mission_config = WorldSimManager.get_mission_config(mission_id)
+	mission_config = WSM.get_mission_config(mission_id)
 
 	if mission_config.is_empty():
-		push_warning("[MissionController] Failed to load mission config for mission_id=" + _mission_id)
+		push_warning("[MC-Setup] Failed to load mission config for mission_id=" + mission_id)
 		return
 
 	# 3) If your JSON also contains an 'id' field, ensure consistency
@@ -137,17 +139,16 @@ func apply_mission_terrain(mission_config: Dictionary, debug_logging: bool) -> v
 			gravity_mgr.update_from_terrain(terrain_generator)
 
 	# Optional global signal if other systems listen.
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("terrain_generated", terrain_generator)
+	EventBus.emit_signal("terrain_generated", terrain_generator)
 
 	# DEBUG: landing zones info if available
 	if terrain_generator.has_method("get_landing_zone_ids"):
 		var ids: Array = terrain_generator.get_landing_zone_ids()
-		print("[MissionSetup] Terrain zones now: ", ids)
+		print("[MC-Setup] Terrain zones now: ", ids)
 	elif "landing_zones" in terrain_generator:
 		var zones = terrain_generator.landing_zones
 		if typeof(zones) == TYPE_DICTIONARY:
-			print("[MissionSetup] Terrain zones dict keys: ", zones.keys())
+			print("[MC-Setup] Terrain zones dict keys: ", zones.keys())
 
 
 func apply_mission_tiles(mission_config: Dictionary, debug_logging: bool) -> void:
@@ -159,14 +160,14 @@ func apply_mission_tiles(mission_config: Dictionary, debug_logging: bool) -> voi
 	if terrain_tiles_controller.has_method("build_tiles_from_mission"):
 		terrain_tiles_controller.build_tiles_from_mission(mission_config)
 		if debug_logging:
-			print("[MissionSetup] Built tiles from mission config")
+			print("[MC-Setup] Built tiles from mission config")
 
 func position_lander_from_spawn(mission_config: Dictionary, chosen_zone_id: String, debug_logging: bool) -> void:
 	if lander == null:
 		lander = GameState.vehicle.lander
 		if lander == null:
 			if debug_logging:
-				print("[MissionSetup] Cannot position lander: no lander reference")
+				print("[MC-Setup] Cannot position lander: no lander reference")
 			return
 
 	# -------------------------
@@ -182,10 +183,10 @@ func position_lander_from_spawn(mission_config: Dictionary, chosen_zone_id: Stri
 				return
 			else:
 				if debug_logging:
-					print("[MissionSetup] Zone '%s' not found; falling back to mission default spawn." % chosen_zone_id)
+					print("[MC-Setup] Zone '%s' not found; falling back to mission default spawn." % chosen_zone_id)
 		else:
 			if debug_logging:
-				print("[MissionSetup] No terrain_generator or get_landing_zone_world_info; falling back to mission default spawn.")
+				print("[MC-Setup] No terrain_generator or get_landing_zone_world_info; falling back to mission default spawn.")
 
 	# -------------------------
 	# 2) Fallback: use mission spawn config
@@ -193,7 +194,7 @@ func position_lander_from_spawn(mission_config: Dictionary, chosen_zone_id: Stri
 	var spawn_cfg: Dictionary = mission_config.get("spawn", {})
 	if spawn_cfg.is_empty():
 		if debug_logging:
-			print("[MissionSetup] WARN: Mission has no 'spawn' block; using current lander position.")
+			print("[MC-Setup] WARN: Mission has no 'spawn' block; using current lander position.")
 		return
 
 	var spawn_pos: Vector2 = spawn_cfg.get("position", lander.global_position)
