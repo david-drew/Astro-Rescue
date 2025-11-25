@@ -174,52 +174,44 @@ func _process(delta: float) -> void:
 # -------------------------------------------------------------------
 
 func _load_mission_config() -> void:
-	# Load mission configuration.
-	# Priority:	
-	#   1) Use GameState.current_mission_config if non-empty (e.g., set by MissionGenerator).
-	#   2) Otherwise, if mission_file_id is set, load JSON from disk under mission_data_dir.
+        # Load mission configuration using WorldSimManager as the resolver.
+        if not GameState:
+                push_warning("MissionController: GameState singleton not found; cannot load mission config.")
+                return
 
-	if not GameState:
-		push_warning("MissionController: GameState singleton not found; cannot load mission config.")
-		return
+        if not Engine.has_singleton("WorldSimManager"):
+                push_warning("MissionController: WorldSimManager singleton not found; cannot resolve mission.")
+                return
 
-	mission_config = GameState.current_mission_config
-	if mission_config.is_empty():
-		# 1) If mission_file_id is manually set (testing) → load JSON
-		if mission_file_id != "":
-			var loaded := mc_setup.load_mission_config_from_json(_mission_id)
-			if not loaded.is_empty():
-				mission_config = loaded
-				GameState.current_mission_config = loaded.duplicate(true)
+        mission_config.clear()
 
-		# 2) If empty AND using real game flow → ask WorldSimManager
-		if mission_config.is_empty():
-			var ws = WorldSimManager.new()
-			if ws != null and ws.has_method("get_next_training_mission_id"):
-				var mid: String = ws.get_next_training_mission_id()
-				if mid != "":
-					var loaded2 := mc_setup.load_mission_config_from_json(mid)
-					if not loaded2.is_empty():
-						mission_config = loaded2
-						GameState.current_mission_config = loaded2.duplicate(true)
+        var resolved_id: String = WorldSimManager.resolve_mission_id_for_launch(GameState)
+        if resolved_id == "":
+                push_warning("MissionController: No mission id resolved for launch.")
+                return
 
-	if mission_config.is_empty():
-		push_warning("MissionController: No mission config available (GameState empty and file load failed).")
-		return
+        _mission_id = resolved_id
 
-	_mission_id = mission_config.get("id", "")
+        var cfg: Dictionary = WorldSimManager.get_mission_config(_mission_id)
+        if cfg.is_empty():
+                push_warning("MissionController: No mission config found for mission_id=" + _mission_id)
+                return
 
-	# Landing forgiveness multiplier (v1.4+). Defaults to 1.0.
-	# Bigger = more tolerant of speed/impact.
-	mc_landing.landing_tolerance_mult = float(mission_config.get("mission_modifiers", {}).get("landing_tolerance_mult", 1.0))
-	if mc_landing.landing_tolerance_mult <= 0.0:
-		mc_landing.landing_tolerance_mult = 1.0
+        mission_config = cfg.duplicate(true)
+        GameState.current_mission_id = _mission_id
+        GameState.current_mission_config = mission_config.duplicate(true)
 
-	# IMPORTANT: is_training no longer exists. Training is category == "tutorial".
-	var cat: String = str(mission_config.get("category", ""))
-	_is_training = (cat == "tutorial")
+        # Landing forgiveness multiplier (v1.4+). Defaults to 1.0.
+        # Bigger = more tolerant of speed/impact.
+        mc_landing.landing_tolerance_mult = float(mission_config.get("mission_modifiers", {}).get("landing_tolerance_mult", 1.0))
+        if mc_landing.landing_tolerance_mult <= 0.0:
+                mc_landing.landing_tolerance_mult = 1.0
 
-	_tier = int(mission_config.get("tier", 0))
+        # IMPORTANT: is_training no longer exists. Training is derived from category.
+        var cat: String = str(mission_config.get("category", "normal"))
+        _is_training = (cat == "tutorial" or cat == "training")
+
+        _tier = int(mission_config.get("tier", 0))
 
 	_failure_rules = mission_config.get("failure_rules", {})
 	_rewards = mission_config.get("rewards", {})
@@ -349,24 +341,26 @@ func prepare_mission() -> void:
 	#									- calls start_landing_gameplay() when done
 	# 3. start_landing_gameplay()	- activate mission (mission is running)
 	##
-	if _mission_prepared:
-		if debug:
-			print("[MC] prepare_mission() ignored; already prepared.")
-		return
-	
-	_reset_mission_runtime_state()
-	mission_config = mc_setup.load_mission_config_from_json(_mission_id)
+        if _mission_prepared:
+                if debug:
+                        print("[MC] prepare_mission() ignored; already prepared.")
+                return
 
-	
-	# If config failed to load, abort gracefully.
-	if mission_config.is_empty():
-		if debug:
-			print("[MissionController] prepare_mission() aborted: no mission_config loaded.")
-		return
-	
-	# NEW: Check if mission uses orbital view
-	var orbital_cfg: Dictionary = mission_config.get("orbital_view", {})
-	_using_orbital_view = orbital_cfg.get("enabled", false)
+        _reset_mission_runtime_state()
+        _load_mission_config()
+
+
+        # If config failed to load, abort gracefully.
+        if mission_config.is_empty():
+                if debug:
+                        print("[MissionController] prepare_mission() aborted: no mission_config loaded.")
+                return
+
+        _chosen_zone_id = GameState.landing_zone_id
+
+        # NEW: Check if mission uses orbital view
+        var orbital_cfg: Dictionary = mission_config.get("orbital_view", {})
+        _using_orbital_view = orbital_cfg.get("enabled", false)
 	
 	if debug:
 		print("[MissionController] Mission prepped: ", _mission_id)
