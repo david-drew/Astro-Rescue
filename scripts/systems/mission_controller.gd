@@ -1701,9 +1701,12 @@ func _hide_landing_gameplay() -> void:
         _bind_lander()
         _set_player_vehicle_mode("hq")
 
-	# Ensure we are bound to the real generator/tiles before hiding.
-	if terrain_generator_path != NodePath(""):
-		_terrain_generator = get_node_or_null(terrain_generator_path) as Node
+        if _lander != null and _lander.has_method("set_active"):
+                _lander.set_active(false)
+
+        # Ensure we are bound to the real generator/tiles before hiding.
+        if terrain_generator_path != NodePath(""):
+                _terrain_generator = get_node_or_null(terrain_generator_path) as Node
 	if terrain_tiles_controller_path != NodePath(""):
 		_terrain_tiles_controller = get_node_or_null(terrain_tiles_controller_path)
 
@@ -1775,11 +1778,14 @@ func _show_landing_gameplay() -> void:
 
         # IMPORTANT: Show and unfreeze the gameplay lander
         if _lander != null:
-		_lander.visible = true
-		
-		# Unfreeze physics so gameplay can begin
-		if _lander is RigidBody2D:
-			_lander.freeze = false
+                _lander.visible = true
+
+                if _lander.has_method("set_active"):
+                        _lander.set_active(true)
+
+                # Unfreeze physics so gameplay can begin
+                if _lander is RigidBody2D:
+                        _lander.freeze = false
 			
 			# Reset velocities to ensure clean start
 			_lander.linear_velocity = Vector2.ZERO

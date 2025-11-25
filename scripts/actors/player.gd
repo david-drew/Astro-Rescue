@@ -27,6 +27,7 @@ var _eva: VehicleEVA = null
 
 
 func _ready() -> void:
+    var eb = EventBus
     _lander = get_node_or_null(lander_path) as VehicleLander
     _buggy = get_node_or_null(buggy_path) as VehicleBuggy
     _eva = get_node_or_null(eva_path) as VehicleEVA
@@ -162,6 +163,10 @@ func _set_controller_active(node: Node, active: bool) -> void:
     # Fallback visibility for safety
     if node is CanvasItem:
         node.visible = active
+        if active:
+            node.show()
+        else:
+            node.hide()
 
     # Ensure processing is aligned with active state
     if active:
