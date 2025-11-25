@@ -90,6 +90,7 @@ var _hud: Node = null
 var _orbital_view: OrbitalView = null  			# NEW!
 var _using_orbital_view: bool = false  			# NEW!
 var _orbital_transition_complete: bool = false  # NEW!
+var _player: Player = null
 
 # --- v1.4 mission json phase runtime ---
 var _phases: Array = []                 # raw phase dicts from mission json (or legacy-wrapped)
@@ -139,12 +140,13 @@ func _reset_mission_runtime_state() -> void:
 
 	# Clear any existing mission timer; _load_mission_config() will
 	# compute a new time limit and recreate the timer as needed.
-	if _mission_timer != null:
-		if _mission_timer.is_inside_tree():
-			_mission_timer.stop()
-		_mission_timer.queue_free()
-	_mission_timer = null
-	_mission_time_limit = -1.0
+        if _mission_timer != null:
+                if _mission_timer.is_inside_tree():
+                        _mission_timer.stop()
+                _mission_timer.queue_free()
+        _mission_timer = null
+        _mission_time_limit = -1.0
+        _player = null
 
 
 func _ready() -> void:
@@ -668,13 +670,14 @@ func start_landing_gameplay() -> void:
 			print("[MC] start_landing_gameplay() ignored; already begun.")
 		return
 
-	_show_landing_gameplay()
+        _show_landing_gameplay()
 
-	# Ensure lander ref is current (Systems nodes can't trust _ready-time binding).
-	_bind_lander()
-	if _lander == null:
-		push_warning("[MissionController] start_landing_gameplay(): lander is null.")
-		return
+        # Ensure lander ref is current (Systems nodes can't trust _ready-time binding).
+        _bind_lander()
+        _set_player_vehicle_mode("lander")
+        if _lander == null:
+                push_warning("[MissionController] start_landing_gameplay(): lander is null.")
+                return
 
 	# Let the lander reset itself and apply loadout/mission config.
 	if _lander.has_method("apply_mission_modifiers"):
@@ -1691,13 +1694,19 @@ func _start_without_orbital_view() -> void:
 
 
 func _hide_landing_gameplay() -> void:
-	##
-	# Hide World node and Lander for orbital view
-	##
+        ##
+        # Hide World node and Lander for orbital view
+        ##
 
-	# Ensure we are bound to the real generator/tiles before hiding.
-	if terrain_generator_path != NodePath(""):
-		_terrain_generator = get_node_or_null(terrain_generator_path) as Node
+        _bind_lander()
+        _set_player_vehicle_mode("hq")
+
+        if _lander != null and _lander.has_method("set_active"):
+                _lander.set_active(false)
+
+        # Ensure we are bound to the real generator/tiles before hiding.
+        if terrain_generator_path != NodePath(""):
+                _terrain_generator = get_node_or_null(terrain_generator_path) as Node
 	if terrain_tiles_controller_path != NodePath(""):
 		_terrain_tiles_controller = get_node_or_null(terrain_tiles_controller_path)
 
@@ -1740,16 +1749,16 @@ func _hide_landing_gameplay() -> void:
 # ==================================================================
 
 func _show_landing_gameplay() -> void:
-	##
-	# Show World node and Lander after orbital transition
-	##
-	var world_node := get_node_or_null("/root/Game/World")
-	if world_node != null:
-		world_node.visible = true
-		if debug_logging:
-			print("[MissionController] World node shown")
-	
-	var _lander:RigidBody2D = get_node_or_null("/root/Game/World/Lander")
+        ##
+        # Show World node and Lander after orbital transition
+        ##
+        _bind_lander()
+
+        var world_node := get_node_or_null("/root/Game/World")
+        if world_node != null:
+                world_node.visible = true
+                if debug_logging:
+                        print("[MissionController] World node shown")
 	
 	# Show terrain
 	if _terrain_generator != null:
@@ -1762,16 +1771,21 @@ func _show_landing_gameplay() -> void:
 		if _terrain_tiles_controller.has_method("show_tiles"):
 			_terrain_tiles_controller.show_tiles()
 	
-	# Position lander FIRST (while still frozen)
-	_position_lander_from_spawn()
-	
-	# IMPORTANT: Show and unfreeze the gameplay lander
-	if _lander != null:
-		_lander.visible = true
-		
-		# Unfreeze physics so gameplay can begin
-		if _lander is RigidBody2D:
-			_lander.freeze = false
+        # Position lander FIRST (while still frozen)
+        _position_lander_from_spawn()
+
+        _set_player_vehicle_mode("lander")
+
+        # IMPORTANT: Show and unfreeze the gameplay lander
+        if _lander != null:
+                _lander.visible = true
+
+                if _lander.has_method("set_active"):
+                        _lander.set_active(true)
+
+                # Unfreeze physics so gameplay can begin
+                if _lander is RigidBody2D:
+                        _lander.freeze = false
 			
 			# Reset velocities to ensure clean start
 			_lander.linear_velocity = Vector2.ZERO
@@ -1791,32 +1805,69 @@ func _show_landing_gameplay() -> void:
 		print("[MissionController] Landing gameplay shown")
 
 func _bind_lander() -> void:
-	# Clear stale reference
-	_lander = null
+        # Clear stale reference
+        _lander = null
 
-	var scene := get_tree().current_scene
-	if scene == null:
-		return
+        var scene := get_tree().current_scene
+        if scene == null:
+                return
 
-	# 1) Preferred method: use the exported NodePath (inspector-friendly)
-	if lander_path != NodePath(""):
-		var ln := scene.get_node_or_null(lander_path)
-		if ln != null:
-			_lander = ln as Node2D
-			return
+        # 1) Preferred method: use the exported NodePath (inspector-friendly)
+        if lander_path != NodePath(""):
+                var ln := scene.get_node_or_null(lander_path)
+                if ln != null:
+                        _lander = ln as Node2D
+                        return
 
-	# 2) Fallback: try to find World/Lander
-	var world_node := scene.get_node_or_null("World")
-	if world_node != null:
-		var ln2 := world_node.get_node_or_null("Lander")
-		if ln2 != null:
-			_lander = ln2 as Node2D
-			return
+        # 2) Fallback: try to find World/Lander
+        var world_node := scene.get_node_or_null("World")
+        if world_node != null:
+                var ln2 := world_node.get_node_or_null("Player/VehicleLander")
+                if ln2 != null:
+                        _lander = ln2 as Node2D
+                        return
 
-	# 3) Last-resort fallback: check group "lander" (if you ever want this)
-	# var landers := scene.get_tree().get_nodes_in_group("lander")
-	# if landers.size() > 0:
-	#     _lander = landers[0] as Node2D
+                var ln3 := world_node.get_node_or_null("Lander")
+                if ln3 != null:
+                        _lander = ln3 as Node2D
+                        return
+
+        # 3) Last-resort fallback: check group "lander" (if you ever want this)
+        # var landers := scene.get_tree().get_nodes_in_group("lander")
+        # if landers.size() > 0:
+        #     _lander = landers[0] as Node2D
+
+
+func _get_player() -> Player:
+        if _player != null and is_instance_valid(_player):
+                return _player
+
+        var scene := get_tree().current_scene
+        if scene != null:
+                _player = scene.get_node_or_null("World/Player") as Player
+                if _player == null:
+                        var world := scene.get_node_or_null("World")
+                        if world != null:
+                                _player = world.get_node_or_null("Player") as Player
+        return _player
+
+
+func _set_player_vehicle_mode(mode: String, phase: Dictionary = {}) -> void:
+        var p := _get_player()
+        if p == null:
+                if EventBus.has_signal("set_vehicle_mode"):
+                        EventBus.emit_signal("set_vehicle_mode", mode)
+                return
+
+        match mode:
+                "lander":
+                        p.enter_lander()
+                "buggy", "atv":
+                        p.enter_buggy(phase)
+                "eva":
+                        p.enter_eva()
+                _:
+                        p.enter_hq()
 
 func _arm_touchdown_for_current_phase() -> void:
 	_touchdown_armed = false
