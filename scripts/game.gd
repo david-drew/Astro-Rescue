@@ -101,9 +101,9 @@ func _set_mode(new_mode: GameMode) -> void:
 
 
 func _apply_mode_visibility() -> void:
-        # Hide everything first, then enable exactly what we want.
-        launch_menu.visible = false
-        hq_panel.visible = false
+	# Hide everything first, then enable exactly what we want.
+	launch_menu.visible = false
+	hq_panel.visible = false
 	briefing_panel.visible = false
 	if orbital_view:
 		orbital_view.visible = false
@@ -128,18 +128,20 @@ func _apply_mode_visibility() -> void:
 		if orbital_view:
 			orbital_view.visible = true
 
-        if _current_mode == GameMode.MISSION_RUNNING:
-                lander_hud.visible = true
-                world.visible = true
+	if _current_mode == GameMode.MISSION_RUNNING:
+		lander_hud.visible = true
+		world.visible = true
 
-        if _current_mode != GameMode.MISSION_RUNNING:
-                if player:
-                        player.enter_hq()
+	if lander_hud:
+		lander_hud.visible = world.visible
+
+	if _current_mode != GameMode.MISSION_RUNNING:
+		if player:
+			player.enter_hq()
 
 	if _current_mode == GameMode.DEBRIEF:
 		if debrief_panel:
 			debrief_panel.visible = true
-
 
 func _apply_mode_processing() -> void:
 	# Disable world ticking unless a mission is running.
@@ -261,6 +263,7 @@ func _on_mission_started(mission_id:String="") -> void:
 	if debug_logging:
 		print("[Game] mission_started: ", mission_id)
 
+	_enter_mission_running()
 
 func _on_mission_completed(mission_id: String, result: Dictionary) -> void:
 	if debug_logging:
