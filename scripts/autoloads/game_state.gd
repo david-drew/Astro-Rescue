@@ -42,11 +42,23 @@ var max_missions: int = 10           # FIFO capacity
 var available_crew_candidates: Array = []
 var store_inventory: Array = []
 
+var player:Node2D = null
+var vehicles:Dictionary = {}
 
 
 func _ready() -> void:
 	# Initialize with a default profile so we always have a safe baseline.
 	player_profile = _create_default_profile()
+	
+	var player_node:Node2D = get_node_or_null("/root/Game/World/Player")
+	var eva:Array = get_tree().get_nodes_in_group("eva")
+	var lander:Array = get_tree().get_nodes_in_group("lander")
+	var buggies:Array = get_tree().get_nodes_in_group("buggy")
+	
+	player = player_node
+	vehicles.eva = eva[0]
+	vehicles.lander = lander[0]
+	vehicles.buggy = buggies[0]
 
 # -------------------------------------------------------------------
 # Profile lifecycle

@@ -279,4 +279,3 @@ func _on_mission_failed(mission_id: String, reason: String, result: Dictionary) 
 
 	# Flow: Mission -> Debrief (fail variant)
 	_enter_debrief()
-
