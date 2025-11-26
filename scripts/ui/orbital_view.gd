@@ -93,11 +93,9 @@ func _process(delta: float) -> void:
 			pass  # Transition handled by camera
 			
 	# TODO DEBUG DELETE 
-	if Engine.get_physics_frames() % 60 == 0:
-		var cam := get_viewport().get_camera_2d()
-		print("Current camera is: ", cam)
-
-
+	#if Engine.get_physics_frames() % 60 == 0:
+	#	var cam := get_viewport().get_camera_2d()
+	#	print("Current camera is: ", cam)
 
 func _update_orbit_animation(delta: float) -> void:
 	if rocket_sprite == null:

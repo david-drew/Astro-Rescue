@@ -12,6 +12,10 @@ var phases: Array = []
 var current_phase_index: int = -1
 var current_phase: Dictionary = {}
 
+var uses_v1_4_phases: bool = false
+var touchdown_armed: bool = false
+var touchdown_consumed_for_phase: bool = false
+
 func init(controller: Node) -> void:
 	mission_controller = controller
 
@@ -48,9 +52,9 @@ func set_current_phase(index: int) -> void:
 	current_phase = phases[index]
 
 	# Delegation in step 1: MC still owns objective runtime.
-	mission_controller.objectives_mgr.init_for_phase(current_phase, mission_controller._mission_config)
-	mission_controller.landing_mgr.arm_for_phase(current_phase)
-	mission_controller.arm_touchdown_for_current_phase()
+	mission_controller.mc_goal.init_for_phase(current_phase, mission_controller.mission_config)
+	mission_controller.mc_landing.arm_for_phase(current_phase)
+	arm_touchdown_for_current_phase()
 
 
 func check_phase_completion_from_touchdown(success: bool, impact_data: Dictionary) -> void:
@@ -190,3 +194,58 @@ func enter_current_phase() -> void:
 		print("\t................We want EVA phase.................")       # TODO DELETE
 		EventBus.emit_signal("phase_mode_requested", "rescue", current_phase)
 		return
+
+func build_runtime_phases_from_config(mission_config: Dictionary) -> void:
+	phases.clear()
+	uses_v1_4_phases = false
+
+	# -------------------------
+	# v1.4 phases from mission_config["phases"]
+	# -------------------------
+	var raw_phases: Array = mission_config.get("phases", [])
+	if raw_phases.size() > 0:
+		uses_v1_4_phases = true
+
+		for p in raw_phases:
+			if typeof(p) != TYPE_DICTIONARY:
+				continue
+			phases.append(p.duplicate(true))
+
+		return
+
+	# -------------------------
+	# Legacy fallback (pre-1.4):
+	# Wrap top-level spawn/objectives into a single lander phase.
+	# -------------------------
+	var legacy_spawn: Dictionary = mission_config.get("spawn", {})
+	var legacy_objectives: Dictionary = mission_config.get("objectives", {})
+	var legacy_primary: Array = legacy_objectives.get("primary", [])
+
+	var legacy_phase: Dictionary = {
+		"id": "legacy_descent",
+		"mode": "lander",
+		"spawn": legacy_spawn,
+		"objectives": legacy_primary,
+		"completion": {
+			# Legacy missions end their only phase on landing.
+			"type": "legacy"
+		}
+	}
+
+	phases.append(legacy_phase)
+
+func arm_touchdown_for_current_phase() -> void:
+	touchdown_armed = false
+	touchdown_consumed_for_phase = false
+
+	if current_phase.is_empty():
+		return
+
+	var mode: String = str(current_phase.get("mode", ""))
+	if mode != "lander":
+		return
+
+	# We only want touchdown processing on descent-like lander phases.
+	var pid: String = str(current_phase.get("id", ""))
+	if pid.find("descent") != -1 or pid.find("landing") != -1 or pid.find("legacy") != -1:
+		touchdown_armed = true

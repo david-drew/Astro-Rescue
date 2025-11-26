@@ -28,6 +28,7 @@ func start_orbital_flow(
 	connect_orbital_view_signals()
 
 	var orbital_cfg: Dictionary = mission_config.get("orbital_view", {})
+	
 	orbital_view.initialize(orbital_cfg)
 	orbital_view.show_orbital_view()
 

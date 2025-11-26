@@ -32,7 +32,7 @@ var mc_result: MissionResults = MissionResults.new()
 # Configuration
 # -------------------------------------------------------------------
 
-@export var debug: bool = false							# If true, prints debug info about objectives and mission state.
+@export var debug: bool = true							# If true, prints debug info about objectives and mission state.
 @export var auto_end_on_all_primary_complete: bool = true			# If true, mission auto-ends when all primary objectives are completed.
 
 @export_category("Scene References")
@@ -82,7 +82,7 @@ var _terrain_generator: Node = null
 var _lander: RigidBody2D = null
 var _hud: Node = null
 var _orbital_view: OrbitalView = null  			# NEW!
-var _using_orbital_view: bool = false  			# NEW!
+var _using_orbital_view: bool = true  			# NEW!
 var _orbital_transition_complete: bool = false  # NEW!
 var _player: Player = null
 
@@ -174,44 +174,42 @@ func _process(delta: float) -> void:
 # -------------------------------------------------------------------
 
 func _load_mission_config() -> void:
-        # Load mission configuration using WorldSimManager as the resolver.
-        if not GameState:
-                push_warning("MissionController: GameState singleton not found; cannot load mission config.")
-                return
+	# Load mission configuration using WorldSimManager as the resolver.
+	if not GameState:
+		push_warning("MissionController: GameState singleton not found; cannot load mission config.")
+		return
 
-        if not Engine.has_singleton("WorldSimManager"):
-                push_warning("MissionController: WorldSimManager singleton not found; cannot resolve mission.")
-                return
+	var WSM := WorldSimManager.new()
 
-        mission_config.clear()
+	mission_config.clear()
 
-        var resolved_id: String = WorldSimManager.resolve_mission_id_for_launch(GameState)
-        if resolved_id == "":
-                push_warning("MissionController: No mission id resolved for launch.")
-                return
+	var resolved_id: String = WSM.resolve_mission_id_for_launch()
+	if resolved_id == "":
+		push_warning("MissionController: No mission id resolved for launch.")
+		return
 
-        _mission_id = resolved_id
+	_mission_id = resolved_id
 
-        var cfg: Dictionary = WorldSimManager.get_mission_config(_mission_id)
-        if cfg.is_empty():
-                push_warning("MissionController: No mission config found for mission_id=" + _mission_id)
-                return
+	var cfg: Dictionary = WSM.get_mission_config(_mission_id)
+	if cfg.is_empty():
+		push_warning("MissionController: No mission config found for mission_id=" + _mission_id)
+		return
 
-        mission_config = cfg.duplicate(true)
-        GameState.current_mission_id = _mission_id
-        GameState.current_mission_config = mission_config.duplicate(true)
+	mission_config = cfg.duplicate(true)
+	GameState.current_mission_id = _mission_id
+	GameState.current_mission_config = mission_config.duplicate(true)
 
-        # Landing forgiveness multiplier (v1.4+). Defaults to 1.0.
-        # Bigger = more tolerant of speed/impact.
-        mc_landing.landing_tolerance_mult = float(mission_config.get("mission_modifiers", {}).get("landing_tolerance_mult", 1.0))
-        if mc_landing.landing_tolerance_mult <= 0.0:
-                mc_landing.landing_tolerance_mult = 1.0
+	# Landing forgiveness multiplier (v1.4+). Defaults to 1.0.
+	# Bigger = more tolerant of speed/impact.
+	mc_landing.landing_tolerance_mult = float(mission_config.get("mission_modifiers", {}).get("landing_tolerance_mult", 1.0))
+	if mc_landing.landing_tolerance_mult <= 0.0:
+		mc_landing.landing_tolerance_mult = 1.0
 
-        # IMPORTANT: is_training no longer exists. Training is derived from category.
-        var cat: String = str(mission_config.get("category", "normal"))
-        _is_training = (cat == "tutorial" or cat == "training")
+	# IMPORTANT: is_training no longer exists. Training is derived from category.
+	var cat: String = str(mission_config.get("category", "normal"))
+	_is_training = (cat == "tutorial" or cat == "training")
 
-        _tier = int(mission_config.get("tier", 0))
+	_tier = int(mission_config.get("tier", 0))
 
 	_failure_rules = mission_config.get("failure_rules", {})
 	_rewards = mission_config.get("rewards", {})
@@ -313,7 +311,7 @@ func _connect_eventbus_signals() -> void:
 	if not eb.is_connected("time_tick", Callable(self, "_on_time_tick")):
 		eb.connect("time_tick", Callable(self, "_on_time_tick"))
 			
-	EventBus.connect("lander_entered_landing_zone", Callable(self, "_on_landing"))		# Might want to remove this or "touchdown"
+	eb.connect("lander_entered_landing_zone", Callable(self, "_on_landing"))		# Might want to remove this or "touchdown"
 
 
 func _on_time_tick(channel_id: String, dt_game: float, _dt_real: float) -> void:
@@ -341,26 +339,27 @@ func prepare_mission() -> void:
 	#									- calls start_landing_gameplay() when done
 	# 3. start_landing_gameplay()	- activate mission (mission is running)
 	##
-        if _mission_prepared:
-                if debug:
-                        print("[MC] prepare_mission() ignored; already prepared.")
-                return
+	if _mission_prepared:
+		if debug:
+			print("[MC] prepare_mission() ignored; already prepared.")
+		return
 
-        _reset_mission_runtime_state()
-        _load_mission_config()
+	_reset_mission_runtime_state()
+	_load_mission_config()
 
+	# If config failed to load, abort gracefully.
+	if mission_config.is_empty():
+		if debug:
+			print("[MissionController] prepare_mission() aborted: no mission_config loaded.")
+		return
 
-        # If config failed to load, abort gracefully.
-        if mission_config.is_empty():
-                if debug:
-                        print("[MissionController] prepare_mission() aborted: no mission_config loaded.")
-                return
+	print("\tprepare_mission: Check: 1")
+	_chosen_zone_id = GameState.landing_zone_id
 
-        _chosen_zone_id = GameState.landing_zone_id
-
-        # NEW: Check if mission uses orbital view
-        var orbital_cfg: Dictionary = mission_config.get("orbital_view", {})
-        _using_orbital_view = orbital_cfg.get("enabled", false)
+	# NEW: Check if mission uses orbital view
+	var orbital_cfg: Dictionary = mission_config.get("orbital_view", {})
+	_using_orbital_view = orbital_cfg.get("enabled", true)
+	#_using_orbital_view = orbital_cfg.get("enabled", false)
 	
 	if debug:
 		print("[MissionController] Mission prepped: ", _mission_id)
@@ -381,32 +380,35 @@ func prepare_mission() -> void:
 	
 	if orbital_view_path != NodePath(""):
 		_orbital_view = get_node_or_null(orbital_view_path) as OrbitalView
-	
+
+	prep_mc_setup(terrain_generator_path, lander_path, hud_path, 
+		orbital_view_path, _terrain_generator, _lander, _hud, _orbital_view)
+
 	# Generate terrain FIRST (needed for both paths)
-	mc_setup.apply_mission_terrain(mission_config,debug)
+	mc_setup.apply_mission_terrain(mission_config, debug)
 	mc_setup.apply_mission_tiles(mission_config, debug)
-	
 	mc_setup.hide_landing_gameplay(debug)
 	
 	_mission_prepared = true
 
 	EventBus.emit_signal("set_vehicle_mode", "lander")
 	
-	if _using_orbital_view and mc_setup.orbital_view != null:
+	if _using_orbital_view and _orbital_view != null:
 		mc_setup.hide_landing_gameplay(debug)
 
-		# Provide terrain generator to orbital flow
+		# Provide terrain generator to orbital flow (now should be non-null)
 		var tg := mc_setup.terrain_generator
 		var ov := mc_setup.orbital_view
+		if ov == null:
+			ov = _orbital_view
 
-		# Compute and store the altitude fallback for target (optional)
 		var spawn_alt := float(mission_config.get("spawn", {}).get("height_above_surface", 12000.0))
 		if tg != null:
 			tg.set_meta("spawn_altitude_fallback", spawn_alt)
 
 		mc_orbit.start_orbital_flow(ov, tg, mission_config, debug)
 	else:
-		start_landing_gameplay()
+		start_landing_gameplay()    # we shouldn't be here
 
 
 func start_landing_gameplay() -> void:
@@ -420,15 +422,15 @@ func start_landing_gameplay() -> void:
 			print("[MC] start_landing_gameplay() ignored; already begun.")
 		return
 
-		mc_setup.show_landing_gameplay(mission_config, _chosen_zone_id, debug)
+	mc_setup.show_landing_gameplay(mission_config, _chosen_zone_id, debug)
 
-		# Ensure lander ref is current (Systems nodes can't trust _ready-time binding).
-		mc_setup.refresh_scene_refs(get_tree().current_scene)
+	# Ensure lander ref is current (Systems nodes can't trust _ready-time binding).
+	mc_setup.refresh_scene_refs(get_tree().current_scene)
 
-		mc_setup.set_player_vehicle_mode("lander")
-		if _lander == null:
-			push_warning("[MissionController] start_landing_gameplay(): lander is null.")
-			return
+	mc_setup.set_player_vehicle_mode("lander")
+	if _lander == null:
+		push_warning("[MissionController] start_landing_gameplay(): lander is null.")
+		return
 
 	# Let the lander reset itself and apply loadout/mission config.
 	if _lander.has_method("apply_mission_modifiers"):
@@ -443,6 +445,26 @@ func start_landing_gameplay() -> void:
 	EventBus.emit_signal("mission_started", _mission_id)
 	
 	_mission_begun = true
+
+func prep_mc_setup(tgp:NodePath, lp:NodePath, hp:NodePath, ovp:NodePath, tg:Node, lnd:Node, hud:Node, ov:Node):
+	# Sync MissionSetup with the live scene nodes and paths
+	mc_setup.terrain_generator_path = tgp
+	mc_setup.lander_path = lp
+	mc_setup.hud_path = hp
+	mc_setup.orbital_view_path = ovp
+
+	# Also push the direct references in, so MissionSetup doesn't depend solely on paths
+	mc_setup.terrain_generator = tg
+	mc_setup.lander = lnd
+	mc_setup.hud = hud
+	mc_setup.orbital_view = ov
+
+	# Make sure MissionSetup rebinds everything before terrain generation
+	var scene_root := get_tree().current_scene
+	if scene_root != null:
+		mc_setup.refresh_scene_refs(scene_root)
+	else:
+		push_warning("[MC] prepare_mission(): current_scene is null during refresh_scene_refs")
 
 func notify_orbit_reached(altitude: float) -> void:
 	##

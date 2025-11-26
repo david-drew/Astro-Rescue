@@ -186,11 +186,11 @@ func _on_new_game_requested() -> void:
 
 	GameState.reset_profile()
 
-	if Engine.has_singleton("MissionRegistry"):
+	if MissionRegistry:
 		MissionRegistry.reload_all()
 
-	if Engine.has_singleton("WorldSimManager"):
-		WorldSimManager.refresh_board_missions_for_hq()
+	var wsm = WorldSimManager.new()
+	wsm.refresh_board_missions_for_hq()
 
 	_enter_hq()
 

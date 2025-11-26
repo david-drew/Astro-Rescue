@@ -114,6 +114,7 @@ func get_terrain_body() -> StaticBody2D:
 # -------------------------------------------------------------------
 
 func _generate_internal(terrain_config: Dictionary) -> void:
+	print("\t......TG:generate_internal: 0")
 	if _terrain_root == null:
 		if debug_logging:
 			push_warning("[TerrainGenerator] Cannot generate terrain; TerrainRoot is null.")

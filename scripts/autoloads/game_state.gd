@@ -95,22 +95,22 @@ func _create_default_profile() -> Dictionary:
 
 
 func reset_profile() -> void:
-        ##
-        # Resets the current profile to default values (e.g., new career).
-        ##
-        player_profile = _create_default_profile()
-        _mission_counter = 0
-        current_mission_id = ""
-        landing_zone_id = ""
-        current_mission_config.clear()
-        current_mission_result.clear()
-        last_mission_result.clear()
-        available_missions.clear()
-        training_progress = 0
-        training_complete = false
+	##
+	# Resets the current profile to default values (e.g., new career).
+	##
+	player_profile = _create_default_profile()
+	_mission_counter = 0
+	current_mission_id = ""
+	landing_zone_id = ""
+	current_mission_config.clear()
+	current_mission_result.clear()
+	last_mission_result.clear()
+	available_missions.clear()
+	training_progress = 0
+	training_complete = false
 
-        if Engine.has_singleton("EventBus"):
-                EventBus.emit_signal("profile_reset", player_profile)
+	if Engine.has_singleton("EventBus"):
+		EventBus.emit_signal("profile_reset", player_profile)
 
 
 func load_profile_from_save(profile_data: Dictionary) -> void:

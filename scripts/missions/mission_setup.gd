@@ -30,51 +30,106 @@ var mission_config:Dictionary = {}
 
 var WSM:WorldSimManager = WorldSimManager.new()
 
-func refresh_scene_refs(scene: Node) -> void:
-	terrain_generator = null
-	terrain_tiles_controller = null
-	lander = null
-	hud = null
-	orbital_view = null
-	player = null
-	world_node = null
+# Helper: try to resolve a node from a NodePath relative to world_node and root.
+func _resolve_node(path: NodePath, world_node: Node, root: Node) -> Node:
+	if path == NodePath(""):
+		return null
 
+	var node: Node = null
+
+	if world_node != null:
+		node = world_node.get_node_or_null(path)
+
+	if node == null and root != null:
+		node = root.get_node_or_null(path)
+
+	return node
+
+
+func refresh_scene_refs(scene: Node) -> void:
 	if scene == null:
 		return
 
-	# World root
-	world_node = scene.get_node_or_null("World")
+	# Determine root and world_node.
+	# root = overall scene root, world_node = your World node if present.
+	var root: Node = scene
+	world_node = null
 
-	# Terrain generator
-	if terrain_generator_path != NodePath(""):
-		var tg := scene.get_node_or_null(terrain_generator_path)
-		if tg != null:
-			terrain_generator = tg
+	# Case 1: scene *is* the World node.
+	if scene.name == "World":
+		world_node = scene
+		if scene.get_tree() != null and scene.get_tree().current_scene != null:
+			root = scene.get_tree().current_scene
+	else:
+		# Case 2: scene is the game root; try to find World under it.
+		var maybe_world := scene.get_node_or_null("World")
+		if maybe_world != null:
+			world_node = maybe_world
+		else:
+			# Fallback: treat scene itself as world-ish.
+			world_node = scene
 
-	# Terrain tiles controller
-	if terrain_tiles_controller_path != NodePath(""):
-		var ttc := scene.get_node_or_null(terrain_tiles_controller_path)
+	if debug and world_node != null:
+		print("[MissionSetup] World node shown: ", world_node.get_path())
+
+	# IMPORTANT: We DO NOT clear terrain_generator / lander / hud / orbital_view here.
+	# If MissionController already injected valid refs, we keep them.
+	# NodePaths are only used as fallback when refs are null.
+
+	# --- Terrain generator ---
+	if terrain_generator == null:
+		if terrain_generator_path != NodePath(""):
+			var tg := _resolve_node(terrain_generator_path, world_node, root)
+			if tg != null:
+				terrain_generator = tg
+				if debug:
+					print("[MissionSetup] terrain_generator resolved from path: ", terrain_generator.get_path())
+
+		# Fallback: try common names if path failed
+		if terrain_generator == null and world_node != null:
+			var tg2 := world_node.get_node_or_null("TerrainGenerator")
+			if tg2 == null:
+				tg2 = world_node.get_node_or_null("Terrain/TerrainGenerator")
+			if tg2 != null:
+				terrain_generator = tg2
+				if debug:
+					print("[MissionSetup] terrain_generator resolved by fallback: ", terrain_generator.get_path())
+
+	# --- Terrain tiles controller ---
+	if terrain_tiles_controller == null and terrain_tiles_controller_path != NodePath(""):
+		var ttc := _resolve_node(terrain_tiles_controller_path, world_node, root)
 		if ttc != null:
 			terrain_tiles_controller = ttc
+			if debug:
+				print("[MissionSetup] terrain_tiles_controller resolved: ", terrain_tiles_controller.get_path())
 
-	# HUD
-	if hud_path != NodePath(""):
-		var h := scene.get_node_or_null(hud_path)
+	# --- HUD ---
+	if hud == null and hud_path != NodePath(""):
+		var h := _resolve_node(hud_path, world_node, root)
 		if h != null:
 			hud = h
+			if debug:
+				print("[MissionSetup] HUD resolved: ", hud.get_path())
 
-	# Orbital view
-	if orbital_view_path != NodePath(""):
-		var ov := scene.get_node_or_null(orbital_view_path)
+	# --- Orbital view ---
+	print("\t[MC-Setup] OV Path: ", orbital_view_path)
+	if orbital_view == null and orbital_view_path != NodePath(""):
+		var ov := _resolve_node(orbital_view_path, world_node, root)
 		if ov != null:
 			orbital_view = ov
+			print("\t[MC-Setup] Got Orbital View During Refresh: ", orbital_view.get_path())
+		else:
+			print("\t[MC-Setup] FAILED Orbital View During Refresh")
 
-	# Lander
-	if lander_path != NodePath(""):
-		var ln := scene.get_node_or_null(lander_path)
+	# --- Lander ---
+	if lander == null and lander_path != NodePath(""):
+		var ln := _resolve_node(lander_path, world_node, root)
 		if ln != null:
 			lander = ln as Node2D
+			if debug:
+				print("[MissionSetup] Lander resolved from path: ", lander.get_path())
 
+	# Fallback: discover lander under World if still null
 	if lander == null and world_node != null:
 		var ln2 := world_node.get_node_or_null("Player/VehicleLander")
 		if ln2 != null:
@@ -84,11 +139,12 @@ func refresh_scene_refs(scene: Node) -> void:
 			if ln3 != null:
 				lander = ln3 as Node2D
 
-	# Player
-	if world_node != null:
+	# --- Player ---
+	if player == null and world_node != null:
 		var p := world_node.get_node_or_null("Player")
 		if p != null:
 			player = p
+
 
 func _load_mission_config() -> void:
 	mission_config.clear()
@@ -114,10 +170,12 @@ func _load_mission_config() -> void:
 	mission_id = json_id
 
 func apply_mission_terrain(mission_config: Dictionary, debug_logging: bool) -> void:
+	print(".....................APPLY MISSION TERRAIN 0.................")
 	# Terrain generator must be bound via refresh_scene_refs()
 	if terrain_generator == null:
 		return
 
+	print(".....................APPLY MISSION TERRAIN 1.................")
 	var terrain_config: Dictionary = mission_config.get("terrain", {})
 	if terrain_config.is_empty():
 		return
@@ -149,7 +207,8 @@ func apply_mission_terrain(mission_config: Dictionary, debug_logging: bool) -> v
 		var zones = terrain_generator.landing_zones
 		if typeof(zones) == TYPE_DICTIONARY:
 			print("[MC-Setup] Terrain zones dict keys: ", zones.keys())
-
+			
+	print(".....................APPLY MISSION TERRAIN 99.................")
 
 func apply_mission_tiles(mission_config: Dictionary, debug_logging: bool) -> void:
 	if terrain_tiles_controller == null:
@@ -164,7 +223,7 @@ func apply_mission_tiles(mission_config: Dictionary, debug_logging: bool) -> voi
 
 func position_lander_from_spawn(mission_config: Dictionary, chosen_zone_id: String, debug_logging: bool) -> void:
 	if lander == null:
-		lander = GameState.vehicle.lander
+		lander = GameState.vehicles.lander
 		if lander == null:
 			if debug_logging:
 				print("[MC-Setup] Cannot position lander: no lander reference")
@@ -187,6 +246,10 @@ func position_lander_from_spawn(mission_config: Dictionary, chosen_zone_id: Stri
 		else:
 			if debug_logging:
 				print("[MC-Setup] No terrain_generator or get_landing_zone_world_info; falling back to mission default spawn.")
+				if terrain_generator:
+					print("Terrain generator found, but no landing zone info")
+				else:	
+					print("Terrain generator NOT found")
 
 	# -------------------------
 	# 2) Fallback: use mission spawn config
