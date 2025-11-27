@@ -112,7 +112,6 @@ func refresh_scene_refs(scene: Node) -> void:
 				print("[MissionSetup] HUD resolved: ", hud.get_path())
 
 	# --- Orbital view ---
-	print("\t[MC-Setup] OV Path: ", orbital_view_path)
 	if orbital_view == null and orbital_view_path != NodePath(""):
 		var ov := _resolve_node(orbital_view_path, world_node, root)
 		if ov != null:

@@ -27,6 +27,8 @@ var mc_setup: MissionSetup = MissionSetup.new()
 var mc_orbit: MissionOrbitalFlow = MissionOrbitalFlow.new()
 var mc_result: MissionResults = MissionResults.new()
 
+var _death_cause: String = ""
+var _death_context: Dictionary = {}
 
 # -------------------------------------------------------------------
 # Configuration
@@ -203,7 +205,7 @@ func _load_mission_config() -> void:
 	# Bigger = more tolerant of speed/impact.
 	mc_landing.landing_tolerance_mult = float(mission_config.get("mission_modifiers", {}).get("landing_tolerance_mult", 1.0))
 	if mc_landing.landing_tolerance_mult <= 0.0:
-		mc_landing.landing_tolerance_mult = 1.0
+		mc_landing.landing_tolerance_mult = 1.4
 
 	# IMPORTANT: is_training no longer exists. Training is derived from category.
 	var cat: String = str(mission_config.get("category", "normal"))
@@ -345,7 +347,11 @@ func prepare_mission() -> void:
 		return
 
 	_reset_mission_runtime_state()
+	print("[MC] prepare_mission() after _reset_mission_runtime_state")
 	_load_mission_config()
+	
+	print("[MC] prepare_mission() after _load_mission_config, mission_config empty? ", mission_config.is_empty())
+
 
 	# If config failed to load, abort gracefully.
 	if mission_config.is_empty():
@@ -471,12 +477,14 @@ func notify_orbit_reached(altitude: float) -> void:
 	# Call this from your LanderController / environment logic when
 	# the lander has achieved a successful escape / orbit condition.
 	##
+	print("\tORBIT REACHED 1")
 	if _mission_state != "running":
 		return
-
+	print("\tORBIT REACHED 2")
 	_orbit_reached = true
 	_orbit_reached_altitude = altitude
 	_orbit_reached_time = _mission_elapsed_time
+	mc_goal.orbit_reached = true
 
 	if debug:
 		print("[MissionController] Orbit reached at altitude=", altitude, " time=", _orbit_reached_time)
@@ -497,14 +505,25 @@ func abort_mission(reason: String = "aborted") -> void:
 # -------------------------------------------------------------------
 # Event handlers
 # -------------------------------------------------------------------
-func _on_landing(zone_id:String, zone_info: Dictionary) -> void:
-	print("TOUCHDOWN (landing)!!")
-	_on_touchdown(zone_info)
+
+func _on_landing(zone_id: String, zone_info: Dictionary) -> void:
+	if debug:
+		print("[MissionController] Fallback landing handler for zone_id=", zone_id)
+
+	# Build a minimal touchdown-like payload for the objectives system.
+	var touchdown_data: Dictionary = {
+		"successful": false,              # We do not know; treat cautiously
+		"impact_data": zone_info.duplicate(true)
+	}
+
+	_on_touchdown(touchdown_data)
 
 
 func _on_touchdown(touchdown_data: Dictionary) -> void:
 	if _mission_state != "running":
 		return
+
+	mc_landing.landing_successful = true 		# TODO: DEBUG may be hacky
 
 	mc_landing.on_touchdown(
 		touchdown_data,
@@ -540,29 +559,44 @@ func _on_lander_altitude_changed(altitude_meters: float) -> void:
 	if _mission_state != "running":
 		return
 
-		# Only consider return-to-orbit after a successful landing.
+	#print("ORBIT REACHED: ", _orbit_reached)
+	#print("LANDNIG SUCCESS: ", mc_landing.landing_successful)
+
+	# Only consider return-to-orbit after a successful landing.
 	if _orbit_reached or not mc_landing.landing_successful:
 		return
 
-
 	var required_altitude: float = mc_goal.get_return_to_orbit_min_altitude()
+	var req_altitude_meters = required_altitude / 3 - 1500.0
 
-	if altitude_meters >= required_altitude:
+	print("\t...........................Now we want this altitude: ", req_altitude_meters, " vs ", altitude_meters)
+	if altitude_meters >= req_altitude_meters:
+		print("\t..............NOTIFY ORBIT REACHED")
 		notify_orbit_reached(altitude_meters)
 		mc_goal.evaluate_return_to_orbit_objectives()
 		_check_for_mission_completion()
 
 
-func _on_player_died() -> void:
+func _on_player_died(cause: String, context: Dictionary) -> void:
 	if _mission_state != "running":
 		return
 
 	_player_died = true
+	_death_cause = cause
+	_death_context = context.duplicate(true)  # keep a copy for result/debrief
 
 	if debug:
-		print("[MissionController] Player died; mission failed.")
+		print("[MissionController] Player died; mission failed. cause=", cause, " context=", context)
 
-	_end_mission("fail", "player_died")
+	# You can choose what to use as the 'reason' string:
+	# - keep the old generic "player_died"
+	# - or use the specific cause
+	var reason := "player_died"
+	if cause != "":
+		reason = cause  # e.g. "lander_crash_high_speed_impact"
+
+	_end_mission("fail", reason)
+
 
 
 func _on_mission_timer_timeout() -> void:
@@ -582,12 +616,19 @@ func _on_mission_timer_timeout() -> void:
 # -------------------------------------------------------------------
 
 func _check_for_mission_completion() -> void:
+	# First, make sure end-condition objectives are evaluated using
+	# the current mission state (time, fuel, damage, orbit).
+	_evaluate_end_condition_objectives()
+	
+	_debug_dump_objectives_state("check_for_mission_completion")
+
 	if mc_goal.any_primary_failed():
 		_end_mission("fail", "primary_objective_failed")
 		return
 
 	if not mc_goal.any_primary_pending() and auto_end_on_all_primary_complete:
 		_end_mission("success", "all_primary_completed")
+
 
 
 # -------------------------------------------------------------------
@@ -603,18 +644,9 @@ func _end_mission(success_state: String, reason: String) -> void:
 	if _mission_timer != null and _mission_timer.is_stopped() == false:
 		_mission_timer.stop()
 
-	# Evaluate any objective types that depend on final state.
-	mc_goal.mission_elapsed_time = _mission_elapsed_time
-	mc_goal.mission_time_limit = _mission_time_limit
-	mc_goal.current_fuel_ratio = _current_fuel_ratio
-	#mc_goal.max_hull_damage_ratio = _max_hull_damage_ratio
-	mc_goal.orbit_reached = _orbit_reached
-
-	mc_goal.evaluate_return_to_orbit_objectives()
-	mc_goal.evaluate_time_under_objectives()
-	mc_goal.evaluate_fuel_remaining_objectives()
-	mc_goal.evaluate_no_damage_objectives()
-
+	# Ensure end-condition objectives are evaluated one last time
+	# using the final mission state (time, fuel, damage, orbit).
+	_evaluate_end_condition_objectives()
 
 	# Mark any remaining pending primary objectives as failed.
 	var had_failed_primary_before: bool = false
@@ -630,15 +662,16 @@ func _end_mission(success_state: String, reason: String) -> void:
 		success_state = "partial"
 		_mission_state = "partial"
 
-	# Build final mission_result.
 	var stats := {
 		"max_hull_damage_ratio": mc_landing.max_hull_damage_ratio,
 		"crashes":               mc_landing.crashes_count,
-		"player_died":          _player_died,
-		"lander_destroyed":     _lander_destroyed,
-		"orbit_reached":        _orbit_reached,
+		"player_died":           _player_died,
+		"lander_destroyed":      _lander_destroyed,
+		"orbit_reached":         _orbit_reached,
 		"orbit_reached_altitude": _orbit_reached_altitude,
-		"orbit_reached_time":   _orbit_reached_time
+		"orbit_reached_time":     _orbit_reached_time,
+		"death_cause":            _death_cause,
+		"death_context":          _death_context,
 	}
 
 	var mission_result := mc_result.build(
@@ -649,13 +682,13 @@ func _end_mission(success_state: String, reason: String) -> void:
 		reason,
 		_mission_elapsed_time,
 		_mission_time_limit,
-		mc_goal.primary_objectives,
+		mc_goal.active_objectives,
 		mc_goal.bonus_objectives,
 		stats,
 		_rewards
 	)
 
-	# Store in GameState so Debrief UI can read it.
+	# Store in GameState
 	GameState.current_mission_result = mission_result.duplicate(true)
 
 	# Broadcast via EventBus.
@@ -663,10 +696,6 @@ func _end_mission(success_state: String, reason: String) -> void:
 		EventBus.emit_signal("mission_completed", _mission_id, mission_result)
 	else:
 		EventBus.emit_signal("mission_failed", _mission_id, reason, mission_result)
-
-	if debug:
-		print("[MissionController] Mission ended: id=", _mission_id, " state=", success_state, " reason=", reason)
-		print("[MissionController] Result: ", mission_result)
 
 
 # ==================================================================
@@ -693,3 +722,30 @@ func _on_eva_interacted(target_id: String) -> void:
 func _on_orbital_ready_to_land(zone_id: String) -> void:
 	_chosen_zone_id = zone_id
 	start_landing_gameplay()
+
+func _evaluate_end_condition_objectives() -> void:
+	# Keep MissionObjectives in sync with the latest mission state
+	# so "end-condition" primaries (time_under, fuel_remaining, no_damage)
+	# can be evaluated before we decide success/fail.
+	print("\t...................Eval End Condition.................")
+	mc_goal.mission_elapsed_time = _mission_elapsed_time
+	mc_goal.mission_time_limit = _mission_time_limit
+	mc_goal.current_fuel_ratio = _current_fuel_ratio
+	mc_goal.orbit_reached = _orbit_reached
+
+	mc_goal.evaluate_time_under_objectives()
+	mc_goal.evaluate_fuel_remaining_objectives()
+	mc_goal.evaluate_no_damage_objectives()
+
+func _debug_dump_objectives_state(label: String) -> void:
+	if not debug:
+		return
+
+	print("[MissionController] Objective state at ", label)
+	print("\tauto_end_on_all_primary_complete = ", auto_end_on_all_primary_complete)
+	for obj in mc_goal.active_objectives:
+		var id := str(obj.get("id", ""))
+		var type := str(obj.get("type", ""))
+		var status := str(obj.get("status", "pending"))
+		var is_primary:bool = obj.get("is_primary", true)
+		print("\t- id=", id, " type=", type, " primary=", is_primary, " status=", status)

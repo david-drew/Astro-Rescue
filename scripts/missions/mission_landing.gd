@@ -2,7 +2,7 @@
 extends RefCounted
 class_name MissionLanding
 
-var debug:bool = false
+var debug:bool = true
 
 var mc_phase = MissionPhases.new()
 
@@ -22,6 +22,7 @@ var previous_landing_site_pos: Vector2 = Vector2.ZERO
 var previous_landing_site_valid: bool = false
 
 func arm_for_phase(phase: Dictionary) -> void:
+	print("\tMC-Land arm_for_phase entered")
 	touchdown_armed = false
 	touchdown_consumed_for_phase = false
 
@@ -34,6 +35,8 @@ func arm_for_phase(phase: Dictionary) -> void:
 
 	# We only want touchdown processing on descent-like lander phases.
 	var pid: String = str(mc_phase.current_phase.get("id", ""))
+	print("\t[MC-Land] arm_for_phase pid: ", pid)					# TODO Debug DELETE
+	
 	if pid.find("descent") != -1 or pid.find("landing") != -1 or pid.find("legacy") != -1:
 		touchdown_armed = true
 
@@ -53,6 +56,7 @@ func on_touchdown(
 	if not touchdown_armed:
 		return
 
+	print("\t.....tdown IS armed.............")	# TODO DELETE
 	if touchdown_consumed_for_phase:
 		return
 
@@ -63,9 +67,12 @@ func on_touchdown(
 	last_touchdown_ms = now_ms
 
 	var success: bool = bool(touchdown_data.get("successful", touchdown_data.get("success", false)))
+	print("\t.....tdown success: ", success)	# TODO DELETE
 	var impact_data: Dictionary = touchdown_data.get("impact_data", touchdown_data)
 	if impact_data.is_empty():
 		return
+	
+	print("\t.....tdown impact: ", impact_data)	# TODO DELETE
 
 	# Apply forgiveness: relax impact speed / success classification a bit.
 	# If your touchdown sender includes an impact/velocity magnitude, scale it down for evaluation.
@@ -104,6 +111,18 @@ func on_touchdown(
 		landing_successful = true
 		store_previous_landing_site(impact_data, mission_controller.get_tree())
 
+	if debug:
+		print("[MC-Landing] touchdown success=", success,
+			" impact_speed=", eval_impact_data.get("impact_speed", 0.0),
+			" v=", eval_impact_data.get("vertical_speed", 0.0),
+			" h=", eval_impact_data.get("horizontal_speed", 0.0),
+			" zone=", eval_impact_data.get("landing_zone_id", ""))
+
+	# Always evaluate landing-related objectives on touchdown
+	objectives_mgr.evaluate_landing_objectives(eval_impact_data, success)
+	objectives_mgr.evaluate_precision_landing_objectives(eval_impact_data)
+	objectives_mgr.evaluate_landing_accuracy_objectives(eval_impact_data)
+
 
 	# Always evaluate landing-related objectives on touchdown
 	objectives_mgr.evaluate_landing_objectives(eval_impact_data, success)
@@ -114,11 +133,11 @@ func on_touchdown(
 	# v1.4: see if this touchdown completes the current lander phase
 	mc_phase.check_phase_completion_from_touchdown(success, eval_impact_data)
 
-	if uses_v1_4_phases:
+	#if uses_v1_4_phases:
 		# Consume touchdown for this descent phase so bounces can't re-trigger
-		touchdown_consumed_for_phase = true
-	else:
-		mission_controller.check_for_mission_completion()
+	touchdown_consumed_for_phase = true
+	#else:
+	#	mission_controller.check_for_mission_completion()
 
 
 func store_previous_landing_site(impact_data: Dictionary, tree: SceneTree) -> void:

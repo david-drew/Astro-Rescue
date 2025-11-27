@@ -9,6 +9,7 @@ enum GameMode {
 	ORBITAL_VIEW,
 	MISSION_RUNNING,
 	DEBRIEF,
+	GAME_OVER
 }
 
 var _current_mode: GameMode = GameMode.LAUNCH_MENU
@@ -28,10 +29,11 @@ var _current_mode: GameMode = GameMode.LAUNCH_MENU
 @onready var launch_menu: Control     = $UI/LaunchMenu
 @onready var hq_panel: Control        = $UI/HQ
 @onready var lander_hud: Control      = $UI/LanderHUD
-
-# IMPORTANT: rename these NodePaths to your real nodes.
 @onready var briefing_panel: Control  = $UI/BriefingPanel 
 @onready var debrief_panel: Control   = $UI/DebriefPanel 
+
+@onready var game_over_panel: Control = $UI/GameOverPanel
+
 
 
 func _ready() -> void:
@@ -69,6 +71,9 @@ func _connect_eventbus() -> void:
 
 	if not eb.is_connected("mission_failed", Callable(self, "_on_mission_failed")):
 		eb.connect("mission_failed", Callable(self, "_on_mission_failed"))
+
+	if not eb.is_connected("game_over_return_requested", Callable(self, "_on_game_over_return_requested")):
+		eb.connect("game_over_return_requested", Callable(self, "_on_game_over_return_requested"))
 
 	# OrbitalView direct signals (from the node itself)
 	# We only connect if the node exists.
@@ -110,7 +115,12 @@ func _apply_mode_visibility() -> void:
 	if lander_hud:
 		lander_hud.visible = false
 	debrief_panel.visible = false
+	game_over_panel.visible = false
 	world.visible = false
+
+	if _current_mode == GameMode.GAME_OVER:
+		if game_over_panel:
+			game_over_panel.visible = true
 
 	if _current_mode == GameMode.LAUNCH_MENU:
 		if launch_menu:
@@ -281,8 +291,23 @@ func _on_mission_completed(mission_id: String, result: Dictionary) -> void:
 
 
 func _on_mission_failed(mission_id: String, reason: String, result: Dictionary) -> void:
-	if debug_logging:
-		print("[Game] mission_failed: ", mission_id, " reason=", reason)
+	var is_death_fail: bool = false
 
-	# Flow: Mission -> Debrief (fail variant)
-	_enter_debrief()
+	if reason == "player_died" or reason == "lander_destroyed":
+		is_death_fail = true
+
+	if is_death_fail:
+		_enter_game_over(reason, result)
+	else:
+		_enter_debrief()
+
+func _enter_game_over(reason: String, result: Dictionary) -> void:
+	_set_mode(GameMode.GAME_OVER)
+
+	if game_over_panel and game_over_panel.has_method("show_game_over"):
+		game_over_panel.call("show_game_over", reason, result)
+
+func _on_game_over_return_requested() -> void:
+	if debug_logging:
+		print("[Game] game_over_return_requested")
+	_enter_launch_menu()

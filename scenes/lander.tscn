@@ -78,7 +78,7 @@ animations = [{
 "speed": 5.0
 }]
 
-[node name="Lander" type="RigidBody2D"]
+[node name="VehicleLander" type="RigidBody2D"]
 script = ExtResource("1_3ri1r")
 base_thrust_force = 4.0
 base_fuel_burn_rate = 4.0

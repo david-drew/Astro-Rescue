@@ -115,7 +115,8 @@ signal lander_exited_landing_zone(zone_id: String, zone_info: Dictionary)
 signal orbit_reached()
 
 ## Emitted on touchdown attempt; success indicates a safe landing according to current thresholds.
-signal touchdown(success: bool, impact_data: Dictionary)
+#signal touchdown(success: bool, impact_data: Dictionary)
+signal touchdown(touchdown_data: Dictionary)
 
 ## Emitted when the lander is destroyed (hard crash, tip-over beyond recovery, etc.).
 signal lander_destroyed(cause: String, context: Dictionary)
@@ -158,6 +159,9 @@ signal profile_save_failed(error_message: String)
 
 signal lander_altitude_changed(altitude_meters: float)
 signal lander_stats_updated(stats: Dictionary)
+## Emitted when the player dismisses the Game Over screen and wants to return to the Launch Menu.
+signal game_over_return_requested()
+
 
 # -------------------------------------------------------------------
 # Optional debug helper

@@ -6,24 +6,39 @@ signal destroyed(cause: String, context: Dictionary)
 signal fuel_changed(fuel_ratio: float)
 signal altitude_changed(altitude_m: float)
 
+# Thrust
 @export_category("Thrust")
-@export var base_thrust_force: float = 200.0
+@export var base_thrust_force: float = 250.0			# 200 = default
 @export var turbo_thrust_multiplier: float = 1.8
 @export var allow_turbo: bool = true
+@export var thrust_boost_multiplier: float = 3.0
 
+@export_category("Thrust Ramp")
+@export var thrust_ramp_enabled: bool = true
+@export var thrust_ramp_duration: float = 2.0          # seconds to go from min → max
+@export var thrust_min_factor: float = 0.25            # quick tap gives ~25% thrust
+@export var turbo_ignores_ramp: bool = true            # turbo = instant full thrust if true
+
+@export_category("Gravity Tuning")
+@export var gravity_multiplier: float = 2.0            # >1.0 = stronger gravity
+
+var _thrust_hold_time: float = 0.0
+
+# Other Stats
 @export_category("Fuel")
-@export var fuel_capacity: float = 100.0
-@export var base_fuel_burn_rate: float = 12.0
+@export var fuel_capacity: float         = 500.0 		# 100 was too little
+@export var base_fuel_burn_rate: float   = 2.0			# 12 was too much
 @export var turbo_fuel_multiplier: float = 2.5
 
 @export_category("Rotation")
-@export var rotation_accel: float = 6.0
-@export var max_angular_speed: float = 4.5
-@export var rotation_drag: float = 6.0
+@export var rotation_accel: float   	= 8.0			# 6 = too slow?
+@export var max_angular_speed: float 	= 8.0			# 4.5
+@export var rotation_drag: float     	= 4.0			# 6.0
+@export var base_rotation_torque: float = 150.0			# 80 = slow but usable
 
 @export_category("Landing Safety")
-@export var safe_vertical_speed: float = 30.0
-@export var safe_horizontal_speed: float = 25.0
+@export var safe_vertical_speed: float = 50.0
+@export var safe_horizontal_speed: float = 40.0
 @export var safe_tilt_deg: float = 20.0
 @export var safe_upright_check_duration: float = 1.5
 
@@ -54,6 +69,11 @@ signal altitude_changed(altitude_m: float)
 @export var hud_update_interval_frames: int = 20
 @export var altitude_change_threshold: float = 5.0
 
+@export var game_over_delay_seconds: float = 3.0
+@onready var _lander_sprite: Sprite2D = $Sprite2D
+@onready var _death_sprite: AnimatedSprite2D = $DeathSprite
+
+
 # Internal state
 var _current_fuel: float = 0.0
 var _last_fuel_ratio: float = 1.0
@@ -82,9 +102,16 @@ func set_active(active: bool) -> void:
 	_active = active
 	visible = active
 	set_physics_process(active)
-	process_mode = Node.PROCESS_MODE_INHERIT if active else Node.PROCESS_MODE_DISABLED
+	 
+	var mode := Node.PROCESS_MODE_DISABLED
+	if _active:
+		mode = Node.PROCESS_MODE_INHERIT
+
+	call_deferred("set", "process_mode", mode)
+
 	if not active:
 		return
+		
 	# When becoming active, reset touchdown flags for a new descent phase.
 	_has_sent_touchdown = false
 
@@ -150,7 +177,6 @@ func _physics_process(delta: float) -> void:
 			_finalize_touchdown()
 
 
-
 func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 	if not _active:
 		return
@@ -160,7 +186,7 @@ func _integrate_forces(state: PhysicsDirectBodyState2D) -> void:
 		state.apply_central_force(_current_wind * wind_force_scale * mass)
 
 	if _current_gravity_vector != Vector2.ZERO:
-		state.apply_central_force(_current_gravity_vector * mass)
+		state.apply_central_force(_current_gravity_vector * mass * gravity_multiplier)
 
 
 # Called by Player
@@ -168,6 +194,85 @@ func apply_controls(delta: float) -> void:
 	if not _active:
 		return
 
+	var thrust_button: float = Input.get_action_strength("lander_thrust")
+	var turbo_pressed: bool = Input.is_action_pressed("lander_turbo")
+	var rotate_left: bool = Input.is_action_pressed("lander_rotate_left")
+	var rotate_right: bool = Input.is_action_pressed("lander_rotate_right")
+
+	# --- Rotation using angular_velocity + accel/drag ---
+	var rotate_input: float = 0.0
+	if rotate_left:
+		rotate_input -= 1.0
+	if rotate_right:
+		rotate_input += 1.0
+
+	if rotate_input != 0.0:
+		var new_ang_vel: float = angular_velocity + rotate_input * rotation_accel * delta
+		angular_velocity = clampf(new_ang_vel, -max_angular_speed, max_angular_speed)
+	elif rotation_drag > 0.0:
+		var drag_step: float = rotation_drag * delta
+		if angular_velocity > 0.0:
+			angular_velocity = max(0.0, angular_velocity - drag_step)
+		elif angular_velocity < 0.0:
+			angular_velocity = min(0.0, angular_velocity + drag_step)
+
+	# --- Thrust ramp timing ---
+	var is_thrusting: bool = thrust_button > 0.0
+
+	if is_thrusting:
+		_thrust_hold_time += delta
+	else:
+		_thrust_hold_time = 0.0
+
+	# --- Compute ramp factor ---
+	var ramp_factor: float = 1.0
+
+	if thrust_ramp_enabled:
+		if is_thrusting:
+			var t: float = 0.0
+			if thrust_ramp_duration > 0.0:
+				t = _thrust_hold_time / thrust_ramp_duration
+			if t < 0.0:
+				t = 0.0
+			if t > 1.0:
+				t = 1.0
+
+			ramp_factor = thrust_min_factor + (1.0 - thrust_min_factor) * t
+		else:
+			ramp_factor = 0.0
+
+	# --- Base thrust input with ramp applied ---
+	var thrust_input: float = thrust_button * ramp_factor
+
+	# --- Turbo behavior ---
+	var thrust_multiplier: float = 1.0
+	var fuel_mult: float = 1.0
+
+	if allow_turbo and turbo_pressed:
+		if turbo_ignores_ramp:
+			# Turbo = instant full throttle; ignore ramp
+			thrust_input = 1.0
+		else:
+			# Turbo still ramps, but you could later give it a shorter ramp duration if desired
+			pass
+
+		thrust_multiplier += turbo_thrust_multiplier
+		fuel_mult = turbo_fuel_multiplier
+
+	# --- Apply thrust if we have fuel and some input ---
+	if thrust_input > 0.0 and _current_fuel > 0.0:
+		var thrust_force: float = base_thrust_force * thrust_input * thrust_multiplier * thrust_boost_multiplier
+		var thrust_vector: Vector2 = Vector2(0.0, -1.0).rotated(rotation) * thrust_force
+
+		# Impulse-style thrust: apply a scaled impulse each frame
+		apply_central_impulse(thrust_vector * delta)
+
+		var fuel_consumed: float = base_fuel_burn_rate * thrust_input * fuel_mult * delta
+		_current_fuel = max(0.0, _current_fuel - fuel_consumed)
+
+
+
+	'''
 	var thrust_input: float = Input.get_action_strength("lander_thrust")
 	var turbo_pressed: bool = Input.is_action_pressed("lander_turbo")
 
@@ -205,6 +310,7 @@ func apply_controls(delta: float) -> void:
 		_current_fuel = max(0.0, _current_fuel - fuel_consumed)
 		_last_fuel_ratio = _get_fuel_ratio()
 		_update_fuel_ratio()
+	'''
 
 
 # -------------------------------------------------------------------
@@ -265,8 +371,7 @@ func _handle_safe_landing() -> void:
 
 	var touchdown_data: Dictionary = get_landing_state()
 
-	EventBus.emit_signal("lander_touchdown", touchdown_data)
-	EventBus.emit_signal("lander_landed_safely", {})
+	EventBus.emit_signal("touchdown", touchdown_data)
 	emit_signal("touchdown", touchdown_data)
 
 
@@ -277,12 +382,23 @@ func get_landing_state(_terrain_generator: Node = null, zone_id: String = "", zo
 	var speed: float = v.length()
 	var tilt_deg: float = abs(rad_to_deg(rotation))
 
-	# FIX: successful uses safe thresholds (not destroy thresholds)
-	var successful: bool = v_vert <= safe_vertical_speed and v_horiz <= safe_horizontal_speed and tilt_deg <= safe_tilt_deg
+	# Allow a bit of margin above the "safe" speeds for a successful landing.
+	# This keeps truly gentle landings easy, but doesn't require absurd precision.
+	var success_vert_limit: float = safe_vertical_speed * 1.3
+	var success_horiz_limit: float = safe_horizontal_speed * 1.3
+
+	var successful: bool = (
+		v_vert <= success_vert_limit and
+		v_horiz <= success_horiz_limit and
+		tilt_deg <= safe_tilt_deg
+	)
 
 	var hull_damage_ratio: float = 0.0
 	if not successful:
-		var over_speed: float = max(max(v_vert - safe_vertical_speed, v_horiz - safe_horizontal_speed), 0.0)
+		var over_speed: float = max(
+			max(v_vert - success_vert_limit, v_horiz - success_horiz_limit),
+			0.0
+		)
 		hull_damage_ratio = clamp(over_speed / max(destroy_vertical_speed, 1.0), 0.0, 1.0)
 
 	return {
@@ -300,23 +416,20 @@ func get_landing_state(_terrain_generator: Node = null, zone_id: String = "", zo
 func _handle_destruction(cause: String, context: Dictionary) -> void:
 	if _has_sent_destruction:
 		return
-
 	_has_sent_destruction = true
 
 	if debug_logging:
 		print("[VehicleLander] Destruction: cause=", cause, " context=", context)
 
-	EventBus.emit_signal("lander_destroyed", cause, context)
-	emit_signal("destroyed", cause, context)
-
-	if hard_crash_always_fatal:
-		EventBus.emit_signal("player_died", "lander_crash_" + cause, context)
-
+	# 1) Immediately stop this body from being simulated as a normal lander
 	set_physics_process(false)
 
 	PhysicsServer2D.body_set_state(get_rid(), PhysicsServer2D.BODY_STATE_LINEAR_VELOCITY, Vector2.ZERO)
 	PhysicsServer2D.body_set_state(get_rid(), PhysicsServer2D.BODY_STATE_ANGULAR_VELOCITY, 0.0)
+	linear_velocity = Vector2.ZERO
+	angular_velocity = 0.0
 
+	'''
 	for i in range(3):
 		await get_tree().physics_frame
 		PhysicsServer2D.body_set_state(get_rid(), PhysicsServer2D.BODY_STATE_LINEAR_VELOCITY, Vector2.ZERO)
@@ -326,11 +439,28 @@ func _handle_destruction(cause: String, context: Dictionary) -> void:
 			linear_velocity = Vector2.ZERO
 			angular_velocity = 0.0
 			break
+	'''
 
 	freeze = true
 	lock_rotation = true
-	linear_velocity = Vector2.ZERO
-	angular_velocity = 0.0
+	_active = false
+	set_process(false)
+
+	# 2) Play the explosion while the mission is still "running" and the world is visible
+	await _play_explosion()
+
+	# 3) Optional extra pause before Game Over (tweak in inspector)
+	if game_over_delay_seconds > 0.0:
+		var timer := get_tree().create_timer(game_over_delay_seconds)
+		await timer.timeout
+
+	# 4) Now tell the rest of the game that the lander (and possibly player) is gone.
+	#    This will cause MissionController to end the mission and Game to switch to GAME_OVER.
+	EventBus.emit_signal("lander_destroyed", cause, context)
+	emit_signal("destroyed", cause, context)
+
+	if hard_crash_always_fatal:
+		EventBus.emit_signal("player_died", "lander_crash_" + cause, context)
 
 
 # -------------------------------------------------------------------
@@ -370,6 +500,8 @@ func _emit_hud_updates() -> void:
 		EventBus.emit_signal("lander_altitude_changed", altitude)
 		emit_signal("altitude_changed", altitude)
 
+	#print("CHECK VELO: ", linear_velocity)
+
 	# Stats packet every HUD tick
 	var stats := {
 		"altitude": altitude,
@@ -385,3 +517,42 @@ func _get_altitude_meters() -> float:
 	# altitude_reference_y should be terrain baseline in pixels
 	var dy_pixels: float = altitude_reference_y - global_position.y
 	return dy_pixels / pixels_per_meter
+
+func _play_explosion() -> void:
+	# Hide the normal lander sprite
+	if _lander_sprite:
+		_lander_sprite.visible = false
+
+	# If we do not have a death sprite, there is nothing else to do visually
+	if _death_sprite == null:
+		return
+
+	# Show the explosion sprite
+	_death_sprite.visible = true
+
+	var frames: SpriteFrames = _death_sprite.sprite_frames
+	if frames == null:
+		return
+
+	# Make sure we have a valid animation name
+	var anim_name: String = _death_sprite.animation
+	if anim_name == "":
+		var names: Array[StringName] = frames.get_animation_names()
+		if names.size() > 0:
+			anim_name = String(names[0])
+			_death_sprite.animation = anim_name
+		else:
+			# No animations defined; nothing to play
+			return
+
+	# Play the explosion animation 4 times
+	var loops: int = 0
+	while loops < 4:
+		_death_sprite.play(anim_name)
+		await _death_sprite.animation_finished
+		_death_sprite.scale = Vector2(_death_sprite.scale.x*1.5, _death_sprite.scale.y*1.5)
+		loops += 1
+
+	# After final loop, hide the explosion sprite so it doesn't freeze on screen
+	_death_sprite.stop()
+	_death_sprite.visible = false

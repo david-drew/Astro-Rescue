@@ -63,7 +63,7 @@ class_name LanderController
 
 @export_category("Gravity")
 @export var use_altitude_gravity: bool = true  # NEW: Enable altitude-based gravity
-@export var gravity_field_manager_path: NodePath = NodePath("/root/GravityFieldManager")
+@export var gravity_field_manager_path: NodePath = NodePath("/root/Game/Systems/GravityFieldManager")
 
 @export_category("HUD Updates")
 @export var hud_update_enabled: bool = true

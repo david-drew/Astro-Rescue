@@ -26,6 +26,7 @@ var previous_landing_site_valid: bool = false
 var previous_landing_site_pos: Vector2 = Vector2.ZERO
 
 func init_for_phase(phase: Dictionary, fullmission_config: Dictionary) -> void:
+	mission_config = fullmission_config.duplicate(true)
 	active_objectives.clear()
 
 	var objs: Array = phase.get("objectives", [])
@@ -304,3 +305,19 @@ func check_reach_previous_landing_site() -> void:
 
 	# If phase completion expects this, advance
 	#phase_mgr.check_phase_completion_from_previous_landing_site(self)
+
+func any_primary_failed() -> bool:
+	# Returns true if any active (primary) objective has status "failed".
+	for obj in active_objectives:
+		var status := str(obj.get("status", "pending"))
+		if status == "failed":
+			return true
+	return false
+
+func any_primary_pending() -> bool:
+	# Returns true if any active (primary) objective is still "pending".
+	for obj in active_objectives:
+		var status := str(obj.get("status", "pending"))
+		if status == "pending":
+			return true
+	return false
