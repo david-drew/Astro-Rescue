@@ -52,13 +52,12 @@ func set_current_phase(index: int) -> void:
 	current_phase = phases[index]
 
 	# Delegation in step 1: MC still owns objective runtime.
-	mission_controller.mc_goal.init_for_phase(current_phase, mission_controller.mission_config)
-	mission_controller.mc_landing.arm_for_phase(current_phase)
-	arm_touchdown_for_current_phase()
+	#mission_controller.mc_goal.init_for_phase(current_phase, mission_controller.mission_config)
+	#mission_controller.mc_landing.arm_for_phase(current_phase)
+	#arm_touchdown_for_current_phase()
 
 
 func check_phase_completion_from_touchdown(success: bool, impact_data: Dictionary) -> void:
-	
 	if not uses_v1_4phases:
 		return
 

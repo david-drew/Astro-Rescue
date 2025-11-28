@@ -8,45 +8,6 @@
   "unique": false,
   "reputation_required": 0,
 
-  "objectives_version": 2,
-  "schema_version": 5,
-
-  "objectives": [
-	{
-	  "id": "land_safely_any_marked",
-	  "type": "landing",
-	  "description": "Land safely in any marked landing zone.",
-	  "is_primary": true,
-	  "params": {
-		"target_zone_id": "any_marked",
-		"max_impact_speed": 11.5
-	  }
-	},
-	{
-	  "id": "reach_beacon",
-	  "type": "reach_poi",
-	  "description": "Drive to the Navigation Beacon.",
-	  "is_primary": true,
-	  "params": {
-		"poi_id": "twilight_beacon",
-		"arrival_radius": 130.0
-	  }
-	},
-	{
-	  "id": "return_to_orbit_after_buggy",
-	  "type": "return_to_orbit",
-	  "description": "Re-board the lander and return to orbit.",
-	  "is_primary": true,
-	  "params": {
-		"min_altitude": 9500.0
-	  }
-	}
-  ],
-
-  "completion": {
-	"mode": "all_primary_completed"
-  },
-
   "environment": {
 	"gravity": {
 	  "strength": 32.0,
@@ -134,8 +95,22 @@
 		"offset_x": -200.0,
 		"initial_velocity": [0.0, 0.0]
 	  },
-	  "camera": { "zoom": 0.55 }
+	  "camera": { "zoom": 0.55 },
+	  "objectives": [
+		{
+		  "id": "land_safely_any_marked",
+		  "description": "Land safely in any marked landing zone.",
+		  "type": "landing",
+		  "target_zone_id": "any_marked",
+		  "max_impact_speed": 11.5
+		}
+	  ],
+	  "completion": {
+		"type": "landed_in_zone",
+		"zone_id": "any_marked"
+	  }
 	},
+
 	{
 	  "id": "buggy_leg",
 	  "mode": "buggy",
@@ -145,13 +120,39 @@
 		"show_altitude": false,
 		"show_fuel": false,
 		"show_wind": false
+	  },
+	  "objectives": [
+		{
+		  "id": "reach_beacon",
+		  "description": "Drive to the Navigation Beacon.",
+		  "type": "reach_poi",
+		  "poi_id": "twilight_beacon",
+		  "arrival_radius": 130.0
+		}
+	  ],
+	  "completion": {
+		"type": "reached_poi",
+		"poi_id": "twilight_beacon"
 	  }
 	},
+
 	{
 	  "id": "ascent",
 	  "mode": "lander",
 	  "spawn": { "from_previous_phase": true },
-	  "camera": { "zoom": 0.60 }
+	  "camera": { "zoom": 0.60 },
+	  "objectives": [
+		{
+		  "id": "return_to_orbit_after_buggy",
+		  "description": "Re-board the lander and return to orbit.",
+		  "type": "return_to_orbit",
+		  "min_altitude": 9500.0
+		}
+	  ],
+	  "completion": {
+		"type": "reached_altitude",
+		"target_altitude": 9500.0
+	  }
 	}
   ],
 

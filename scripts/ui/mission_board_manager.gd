@@ -178,7 +178,7 @@ func _on_mission_button_pressed(button: Button) -> void:
 	EventBus.emit_signal("start_mission_requested", mission_id, mission_cfg)
 	GameState.current_mission_id = mission_id
 	GameState.current_mission_config = mission_cfg
-
+	self.visible = false
 
 func _on_close_button_pressed() -> void:
 	self.visible = false

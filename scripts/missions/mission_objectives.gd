@@ -1,323 +1,518 @@
-# res://scripts/modes/mode1/mission_objectives.gd
 extends RefCounted
-class_name MissionObjectives
+class_name MissionObjectives		# MissionObjectivesV2
 
-var debug:bool = false
+signal objective_updated(objective_id: String, new_state: Dictionary)
+signal objectives_changed(snapshot: Array)
 
-var mc_phase:MissionPhases = MissionPhases.new()
+var debug: bool = false
 
-# Runtime objective lists
-var active_objectives: Array = []      # current phase primaries (runtime dicts)
-var bonus_objectives: Array = []       # legacy top-level bonus (runtime dicts)
+var _mission_id: String = ""
+var _objectives: Array = []
 
-# Lightweight shared runtime stats (set by MC / Landing)
-var mission_config: Dictionary = {}
-var mission_elapsed_time: float = 0.0
-var mission_time_limit: float = -1.0
-var current_fuel_ratio: float = 1.0
-var max_hull_damage_ratio: float = 0.0
-var orbit_reached: bool = false
-
-# POI / EVA state used by objectives
-var current_poi_inside: String = ""
-
-# Previous landing site objective state (filled by Landing/MC for now)
-var previous_landing_site_valid: bool = false
-var previous_landing_site_pos: Vector2 = Vector2.ZERO
-
-func init_for_phase(phase: Dictionary, fullmission_config: Dictionary) -> void:
-	mission_config = fullmission_config.duplicate(true)
-	active_objectives.clear()
-
-	var objs: Array = phase.get("objectives", [])
-	for obj in objs:
-		if typeof(obj) != TYPE_DICTIONARY:
-			continue
-		var runtime_obj: Dictionary = obj.duplicate(true)
-		runtime_obj["status"] = "pending"
-		runtime_obj["progress"] = {}
-		active_objectives.append(runtime_obj)
-
-	bonus_objectives.clear()
-	var legacy_obj_block: Dictionary = mission_config.get("objectives", {})
-	var legacy_bonus: Array = legacy_obj_block.get("bonus", [])
-	for obj_b in legacy_bonus:
-		if typeof(obj_b) != TYPE_DICTIONARY:
-			continue
-		var runtime_obj_b: Dictionary = obj_b.duplicate(true)
-		runtime_obj_b["status"] = "pending"
-		runtime_obj_b["progress"] = {}
-		bonus_objectives.append(runtime_obj_b)
-
-	#mission_controller.arm_touchdown_for_current_phase()
+var _metrics: Dictionary = {
+	"elapsed_time": 0.0,
+	"time_limit": 0.0,
+	"fuel_ratio": 1.0,
+	"max_hull_damage_ratio": 0.0,
+	"crashes": 0,
+	"orbit_reached": false
+}
 
 
-func on_poi_entered(poi_id: String) -> void:
-	current_poi_inside = poi_id
+# -------------------------------------------------------------------
+# Public API
+# -------------------------------------------------------------------
 
-	# Complete reach_poi objectives in active phase
-	for obj in active_objectives:
-		if obj.get("status", "pending") != "pending":
-			continue
-		if obj.get("type", "") != "reach_poi":
-			continue
+func load_from_config(mission_id: String, mission_config: Dictionary) -> void:
+	_mission_id = mission_id
+	_objectives.clear()
 
-		var target_id: String = str(get_obj_param(obj, "poi_id", ""))
-		if target_id != "" and target_id == poi_id:
-			obj["status"] = "completed"
+	var raw_objectives: Array = mission_config.get("objectives", [])
+	for raw in raw_objectives:
+		var obj: Dictionary = {}
+		obj["id"] = str(raw.get("id", ""))
+		obj["type"] = str(raw.get("type", ""))
+		obj["description"] = str(raw.get("description", ""))
+		obj["is_primary"] = bool(raw.get("is_primary", true))
+
+		var params: Dictionary = raw.get("params", {})
+		obj["params"] = params.duplicate(true)
+		obj["status"] = "pending"
+		obj["progress"] = {}
+
+		_validate_objective_type(obj)	# Sanity check
+		_objectives.append(obj)
+
+	if debug:
+		print("[MissionObjectivesV2] Loaded ", _objectives.size(), " objectives for mission ", _mission_id)
+
+
+func reset_state() -> void:
+	for obj in _objectives:
+		obj["status"] = "pending"
+		obj["progress"] = {}
+	if debug:
+		print("[MissionObjectivesV2] State reset")
+
+
+func set_metrics(metrics: Dictionary) -> void:
+	for key in _metrics.keys():
+		if metrics.has(key):
+			_metrics[key] = metrics[key]
+
+	if debug:
+		print("[MissionObjectivesV2] Metrics updated: ", _metrics)
+
+
+# High-level event entry point
+func handle_event(event_type: String, payload: Dictionary) -> void:
+	if debug:
+		print("[MissionObjectives] handle_event type=", event_type, " payload=", payload)
+
+	match event_type:
+		"touchdown":
+			_evaluate_landing_related(payload)
+		"orbit_reached":
+			_metrics["orbit_reached"] = true
+			_evaluate_return_to_orbit(payload)
+		"player_died":
+			_evaluate_player_death(payload)
+		"damage_event":
+			_evaluate_damage_based(payload)
+		"zone_reached":
+			_evaluate_reach_zone(payload)
+		"poi_reached":
+			_evaluate_reach_poi(payload)
+		"rescue_interaction_completed":
+			_evaluate_rescue_interact(payload)
+		"mission_tick":
+			pass
+		_:
 			if debug:
-				print("[MissionController] Objective completed: reach_poi id=", obj.get("id", ""))
+				print("[MissionObjectives] Unknown event_type: ", event_type)
 
-	# Phase completion rule: reached_poi
-	mc_phase.check_phase_completion_from_poi(poi_id)
+	_emit_objectives_changed()
+
+# Wrappers for Mission Controller
+func on_zone_reached(zone_id: String) -> void:
+	handle_event("zone_reached", {"zone_id": zone_id})
+
+func on_poi_reached(poi_id: String) -> void:
+	handle_event("poi_reached", {"poi_id": poi_id})
+
+func on_rescue_interaction_completed(target_id: String) -> void:
+	handle_event("rescue_interaction_completed", {"target_id": target_id})
+
+func on_touchdown(touchdown_data: Dictionary) -> void:
+	handle_event("touchdown", touchdown_data)
+
+func on_orbit_reached(data: Dictionary) -> void:
+	handle_event("orbit_reached", data)
+
+func on_player_died(cause: String, context: Dictionary) -> void:
+	var payload := {"cause": cause, "context": context}
+	handle_event("player_died", payload)
+
+func on_damage_event(data: Dictionary) -> void:
+	handle_event("damage_event", data)
 
 
-func on_poi_exited(poi_id: String) -> void:
-	if current_poi_inside == poi_id:
-		current_poi_inside = ""
+# Called by MissionController right before building MissionResult.
+# This is where we evaluate metrics-based objectives that depend on final state
+# (time_under, fuel_remaining, no_damage, etc.).
+func finalize_for_mission_end() -> void:
+	_evaluate_time_based_final()
+	_evaluate_fuel_based_final()
+	_evaluate_damage_based_final()
+
+	if debug:
+		print("[MissionObjectivesV2] finalize_for_mission_end")
+
+	_emit_objectives_changed()
 
 
-func on_eva_interacted(target_id: String) -> void:
-	#if mission_state != "running":
-	#	return
+# Summary/queries ----------------------------------------------------
 
-	# Complete rescue_interact objectives
-	for obj in active_objectives:
-		if obj.get("status", "pending") != "pending":
+func get_summary_state() -> Dictionary:
+	var primary_completed := 0
+	var primary_failed := 0
+	var primary_pending := 0
+	var bonus_completed := 0
+	var bonus_failed := 0
+	var bonus_pending := 0
+
+	for obj in _objectives:
+		var is_primary := bool(obj.get("is_primary", true))
+		var status := str(obj.get("status", "pending"))
+		if is_primary:
+			if status == "completed":
+				primary_completed += 1
+			elif status == "failed":
+				primary_failed += 1
+			else:
+				primary_pending += 1
+		else:
+			if status == "completed":
+				bonus_completed += 1
+			elif status == "failed":
+				bonus_failed += 1
+			else:
+				bonus_pending += 1
+
+	var overall_state := "running"
+	if primary_failed > 0:
+		overall_state = "fail"
+	elif primary_pending == 0 and primary_completed > 0:
+		# All primaries finished, none failed.
+		# If any bonus failed, consider that partial; otherwise success.
+		if bonus_failed > 0:
+			overall_state = "partial"
+		else:
+			overall_state = "success"
+
+	return {
+		"overall_state": overall_state,
+		"primary_completed": primary_completed,
+		"primary_failed": primary_failed,
+		"primary_pending": primary_pending,
+		"bonus_completed": bonus_completed,
+		"bonus_failed": bonus_failed,
+		"bonus_pending": bonus_pending
+	}
+
+
+func any_primary_failed() -> bool:
+	for obj in _objectives:
+		if not bool(obj.get("is_primary", true)):
 			continue
-		if obj.get("type", "") != "rescue_interact":
+		if str(obj.get("status", "pending")) == "failed":
+			return true
+	return false
+
+
+func are_all_primary_completed() -> bool:
+	var has_primary := false
+	for obj in _objectives:
+		if not bool(obj.get("is_primary", true)):
 			continue
+		has_primary = true
+		var status := str(obj.get("status", "pending"))
+		if status != "completed":
+			return false
+	if not has_primary:
+		return false
+	return true
 
-		var t: String = str(get_obj_param(obj, "target_id", ""))
-		if t == "" or t != target_id:
-			continue
 
-		# If you want timed interaction, we can add progress tracking.
-		# For now, complete on interact event.
-		obj["status"] = "completed"
-		if debug:
-			print("[MC-Objectives] Objective completed: rescue_interact id=", obj.get("id", ""))
+func get_objectives_snapshot() -> Array:
+	var result: Array = []
+	for obj in _objectives:
+		result.append(obj.duplicate(true))
+	return result
 
-	#phases_mgr.check_phase_completion_from_rescue(target_id, self)
 
-func on_orbit_reached() -> void:
-	orbit_reached = true
-	evaluate_return_to_orbit_objectives()
+func get_primary_objectives() -> Array:
+	var result: Array = []
+	for obj in _objectives:
+		if bool(obj.get("is_primary", true)):
+			result.append(obj.duplicate(true))
+	return result
 
-# Evaluation helpers (all moved)
-func get_obj_param(obj: Dictionary, key: String, default_value):
+
+func get_bonus_objectives() -> Array:
+	var result: Array = []
+	for obj in _objectives:
+		if not bool(obj.get("is_primary", true)):
+			result.append(obj.duplicate(true))
+	return result
+
+
+# -------------------------------------------------------------------
+# Internal helpers
+# -------------------------------------------------------------------
+
+func _mark_completed(obj: Dictionary) -> void:
+	var old_status := str(obj.get("status", "pending"))
+	obj["status"] = "completed"
+	if debug:
+		print("[MissionObjectivesV2] completed ", obj.get("id", ""), " (was ", old_status, ")")
+	_emit_objective_updated(obj)
+
+
+func _mark_failed(obj: Dictionary) -> void:
+	var old_status := str(obj.get("status", "pending"))
+	obj["status"] = "failed"
+	if debug:
+		print("[MissionObjectivesV2] failed ", obj.get("id", ""), " (was ", old_status, ")")
+	_emit_objective_updated(obj)
+
+
+func _emit_objective_updated(obj: Dictionary) -> void:
+	var oid := str(obj.get("id", ""))
+	var snapshot := obj.duplicate(true)
+	emit_signal("objective_updated", oid, snapshot)
+
+
+func _emit_objectives_changed() -> void:
+	var snapshot := get_objectives_snapshot()
+	emit_signal("objectives_changed", snapshot)
+
+
+func _get_param(obj: Dictionary, name: String, default_value: Variant) -> Variant:
 	var params: Dictionary = obj.get("params", {})
-	if params.has(key):
-		return params.get(key, default_value)
+	if params.has(name):
+		return params[name]
+	return default_value
 
-	return obj.get(key, default_value)
 
+# -------------------------------------------------------------------
+# Evaluation: event-driven objectives
+# -------------------------------------------------------------------
 
-func get_return_to_orbit_min_altitude() -> float:
-	var min_altitude: float = 0.0
-	for obj in active_objectives:
-		if obj.get("type", "") != "return_to_orbit":
+func _evaluate_landing_related(touchdown_data: Dictionary) -> void:
+	var impact_speed := float(touchdown_data.get("impact_speed", 0.0))
+	var landing_zone_id := str(touchdown_data.get("landing_zone_id", ""))
+	var successful := bool(touchdown_data.get("successful", false))
+
+	if debug:
+		print("[MissionObjectivesV2] touchdown: success=", successful,
+			" impact_speed=", impact_speed,
+			" zone=", landing_zone_id)
+
+	for obj in _objectives:
+		if str(obj.get("type", "")) != "landing":
+			continue
+		if str(obj.get("status", "pending")) != "pending":
 			continue
 
-		var candidate: float = float(get_obj_param(obj, "min_altitude", 0.0))
-		if candidate > 0.0 and (min_altitude <= 0.0 or candidate < min_altitude):
-			min_altitude = candidate
+		var oid := str(obj.get("id", ""))
+		var target_zone_id := str(_get_param(obj, "target_zone_id", "any"))
+		var max_impact_speed := float(_get_param(obj, "max_impact_speed", 0.0))
 
-		# If no explicit return-to-orbit altitude was set on objectives, fall back to the
-		# mission's spawn height, which represents the orbital insertion altitude.
-		if min_altitude <= 0.0:
-			var spawn_cfg: Dictionary = mission_config.get("spawn", {})
-			var spawn_height: float = float(spawn_cfg.get("height_above_surface", 0.0))
-			if spawn_height > 0.0:
-				min_altitude = spawn_height
+		if debug:
+			print("[MissionObjectivesV2] eval landing id=", oid,
+				" success=", successful,
+				" target_zone_id=", target_zone_id,
+				" impact_speed=", impact_speed,
+				" max_impact_speed=", max_impact_speed)
 
-	# Final fallback: ensure orbit requires a meaningful climb.
-	if min_altitude <= 0.0:
-		min_altitude = 10000.0
-
-	return min_altitude
-
-func evaluate_landing_objectives(impact_data: Dictionary, success: bool) -> void:
-	for obj in active_objectives:
-		if obj.get("type", "") != "landing":
-			continue
-		if obj.get("status", "pending") != "pending":
+		if not successful:
 			continue
 
-		if not success:
-			continue
-
-		var target_zone_id: String = get_obj_param(obj, "target_zone_id", "")
-		var landing_zone_id: String = impact_data.get("landing_zone_id", "")
 		if target_zone_id != "" and target_zone_id != "any" and landing_zone_id != target_zone_id:
 			continue
 
-		var max_speed: float = float(get_obj_param(obj, "max_impact_speed", 0.0))
-		var impact_speed: float = float(impact_data.get("impact_speed", 0.0))
-		if max_speed > 0.0 and impact_speed > max_speed:
+		if max_impact_speed > 0.0 and impact_speed > max_impact_speed:
 			continue
 
-		obj["status"] = "completed"
-		#_landing_successful = true
+		_mark_completed(obj)
+
+
+func _evaluate_return_to_orbit(data: Dictionary) -> void:
+	var altitude := float(data.get("altitude", 0.0))
+	if debug:
+		print("[MissionObjectivesV2] orbit_reached altitude=", altitude)
+
+	for obj in _objectives:
+		if str(obj.get("type", "")) != "return_to_orbit":
+			continue
+		if str(obj.get("status", "pending")) != "pending":
+			continue
+
+		var min_altitude := float(_get_param(obj, "min_altitude", 0.0))
+		if min_altitude > 0.0 and altitude < min_altitude:
+			continue
+
+		_mark_completed(obj)
+
+
+func _evaluate_player_death(payload: Dictionary) -> void:
+	# If you ever want objectives that fail explicitly on death (e.g. "keep crew alive"),
+	# this is where you'd implement them. For now we don't auto-fail anything here.
+	if debug:
+		print("[MissionObjectivesV2] player_died event: ", payload)
+
+
+func _evaluate_damage_based(payload: Dictionary) -> void:
+	# Optional: if you emit fine-grained damage events, handle them here.
+	# For now, we rely on final metrics in _evaluate_damage_based_final.
+	if debug:
+		print("[MissionObjectivesV2] damage_event: ", payload)
+
+
+# -------------------------------------------------------------------
+# Evaluation: metrics-based objectives (usually at mission end)
+# -------------------------------------------------------------------
+
+func _evaluate_time_based_final() -> void:
+	var elapsed_time := float(_metrics.get("elapsed_time", 0.0))
+
+	for obj in _objectives:
+		if str(obj.get("type", "")) != "time_under":
+			continue
+		if str(obj.get("status", "pending")) != "pending":
+			continue
+
+		var time_limit := float(_get_param(obj, "time_limit_seconds", 0.0))
+		if time_limit <= 0.0:
+			continue
+
+		if elapsed_time <= time_limit:
+			_mark_completed(obj)
+		else:
+			_mark_failed(obj)
+
+
+func _evaluate_fuel_based_final() -> void:
+	var fuel_ratio := float(_metrics.get("fuel_ratio", 1.0))
+
+	for obj in _objectives:
+		if str(obj.get("type", "")) != "fuel_remaining":
+			continue
+		if str(obj.get("status", "pending")) != "pending":
+			continue
+
+		var min_ratio := float(_get_param(obj, "min_fuel_ratio", 0.0))
+		if min_ratio <= 0.0:
+			continue
+
+		if fuel_ratio >= min_ratio:
+			_mark_completed(obj)
+		else:
+			_mark_failed(obj)
+
+
+func _evaluate_damage_based_final() -> void:
+	var max_damage_ratio := float(_metrics.get("max_hull_damage_ratio", 0.0))
+
+	for obj in _objectives:
+		if str(obj.get("type", "")) != "no_damage":
+			continue
+		if str(obj.get("status", "pending")) != "pending":
+			continue
+
+		var allowed_max := float(_get_param(obj, "max_damage_ratio", 0.0))
+		if max_damage_ratio < allowed_max: # default means "no damage allowed"
+			_mark_completed(obj)
+		else:
+			_mark_failed(obj)
+
+func get_return_to_orbit_min_altitude() -> float:
+	var min_altitude: float = 2500.0
+	
+	for obj in _objectives:
+		if (obj.get("id", "")) == "return_to_orbit_after_ground_ops":
+			var params:Dictionary = obj.get("params", {})
+			var min_alt := float(params.get("min_altitude", 0.0))
+			if min_alt > 0.0:
+				min_altitude = min_alt/3.0 - 500.0
+	
+	#min_altitude = mission_config.get("min_altitude", 2500.0)
+	return min_altitude
+
+func _validate_objective_type(obj: Dictionary) -> void:
+	var supported := [
+		"landing",
+		"return_to_orbit",
+		"time_under",
+		"fuel_remaining",
+		"no_damage",
+		"reach_zone",
+		"reach_poi",
+		"rescue_interact"
+	]
+
+	var t := str(obj.get("type", ""))
+	if not supported.has(t):
+		push_warning("[MissionObjectives] Unknown objective type '"
+			+ t + "' for id='" + str(obj.get("id", "")) + "'")
+
+
+func _evaluate_reach_zone(payload: Dictionary) -> void:
+	var reached_zone_id := str(payload.get("zone_id", ""))
+
+	if debug:
+		print("[MissionObjectives] zone_reached: zone_id=", reached_zone_id)
+
+	for obj in _objectives:
+		if str(obj.get("type", "")) != "reach_zone":
+			continue
+		if str(obj.get("status", "pending")) != "pending":
+			continue
+
+		var oid := str(obj.get("id", ""))
+		var target_zone_id := str(_get_param(obj, "target_zone_id", ""))
+		if target_zone_id == "":
+			if debug:
+				print("[MissionObjectives] reach_zone id=", oid, " has no target_zone_id; skipping")
+			continue
+
 		if debug:
-			print("[MC-Objectives] Objective completed: landing id=", obj.get("id", ""))
+			print("[MissionObjectives] eval reach_zone id=", oid,
+				" target_zone_id=", target_zone_id,
+				" reached_zone_id=", reached_zone_id)
 
-func evaluate_precision_landing_objectives(impact_data: Dictionary) -> void:
-	for obj in active_objectives:
-		if obj.get("type", "") != "precision_landing":
-			continue
-		if obj.get("status", "pending") != "pending":
+		if reached_zone_id != target_zone_id:
 			continue
 
-		var max_hull_damage: float = float(obj.get("max_hull_damage_ratio", 0.0))
-		var hull_damage: float = float(impact_data.get("hull_damage_ratio", 0.0))
+		_mark_completed(obj)
 
-		if hull_damage <= max_hull_damage:
-			obj["status"] = "completed"
+func _evaluate_reach_poi(payload: Dictionary) -> void:
+	var reached_poi_id := str(payload.get("poi_id", ""))
+
+	if debug:
+		print("[MissionObjectives] poi_reached: poi_id=", reached_poi_id)
+
+	for obj in _objectives:
+		if str(obj.get("type", "")) != "reach_poi":
+			continue
+		if str(obj.get("status", "pending")) != "pending":
+			continue
+
+		var oid := str(obj.get("id", ""))
+		var target_poi_id := str(_get_param(obj, "poi_id", ""))
+
+		if target_poi_id == "":
 			if debug:
-				print("[MC-Objectives] Objective completed: precision_landing id=", obj.get("id", ""))
-
-
-func evaluate_landing_accuracy_objectives(impact_data: Dictionary) -> void:
-	for obj in active_objectives:
-		if obj.get("type", "") != "landing_accuracy":
-			continue
-		if obj.get("status", "pending") != "pending":
+				print("[MissionObjectives] reach_poi id=", oid, " has no poi_id; skipping")
 			continue
 
-		var landing_zone_id: String = impact_data.get("landing_zone_id", "")
-		var expected_zone_id: String = obj.get("landing_zone_id", "")
-
-		if landing_zone_id != "" and landing_zone_id == expected_zone_id:
-			obj["status"] = "completed"
-			if debug:
-				print("[MC-Objectives] Objective completed: landing_accuracy id=", obj.get("id", ""))
-
-
-func evaluate_return_to_orbit_objectives() -> void:
-	for obj in active_objectives:
-		if obj.get("type", "") != "return_to_orbit":
-			continue
-		if obj.get("status", "pending") != "pending":
-			continue
-
-		if orbit_reached:
-			obj["status"] = "completed"
-			if debug:
-				print("[MC-Objectives] Objective completed: return_to_orbit id=", obj.get("id", ""))
-
-
-func evaluate_time_under_objectives() -> void:
-	for obj in active_objectives:
-		if obj.get("type", "") != "time_under":
-			continue
-		if obj.get("status", "pending") != "pending":
-			continue
-
-		var limit: float = float(obj.get("time_limit_seconds", 0.0))
-		if mission_elapsed_time <= limit:
-			obj["status"] = "completed"
-			if debug:
-				print("[MC-Objectives] Objective completed: time_under id=", obj.get("id", ""))
-
-
-
-func evaluate_fuel_remaining_objectives() -> void:
-	for obj in active_objectives:
-		if obj.get("type", "") != "fuel_remaining":
-			continue
-		if obj.get("status", "pending") != "pending":
-			continue
-
-		var min_ratio: float = float(obj.get("min_fuel_ratio", 0.0))
-		if current_fuel_ratio >= min_ratio:
-			obj["status"] = "completed"
-			if debug:
-				print("[MC-Objectives] Objective completed: fuel_remaining id=", obj.get("id", ""))
-
-
-func evaluate_no_damage_objectives() -> void:
-	for obj in active_objectives:
-		if obj.get("type", "") != "no_damage":
-			continue
-		if obj.get("status", "pending") != "pending":
-			continue
-
-		if max_hull_damage_ratio <= 0.0:
-			obj["status"] = "completed"
-			if debug:
-				print("[MC-Objectives] Objective completed: no_damage id=", obj.get("id", ""))
-
-
-func force_fail_all_pending_primary(reason: String) -> void:
-	for obj in active_objectives:
-		if obj.get("status", "pending") == "pending":
-			obj["status"] = "failed"
-			if debug:
-				print("[MC-Objectives] Primary objective failed by reason=", reason, " id=", obj.get("id", ""))
-
-
-func tick_phase_objectives() -> void:
-	if mc_phase.current_phase.is_empty():
-		return
-
-	if str(mc_phase.current_phase.get("mode","")) == "buggy":
-		check_reach_previous_landing_site()
-
-
-func check_reach_previous_landing_site() -> void:
-	if not previous_landing_site_valid:
-		return
-
-	# Find pending reach_previous_landing_site objective and its radius
-	var radius: float = 0.0
-	var has_obj: bool = false
-
-	for obj in active_objectives:
-		if obj.get("status", "pending") != "pending":
-			continue
-		if obj.get("type", "") != "reach_previous_landing_site":
-			continue
-
-		radius = float(get_obj_param(obj, "arrival_radius", 140.0))
-		has_obj = true
-
-	if not has_obj:
-		return
-
-	# Get the buggy node.
-	# Your VehicleBuggy should add itself to group "buggy" on ready.
-	var buggy: Node2D = GameState.vehicle.buggy
-	var dist: float = buggy.global_position.distance_to(previous_landing_site_pos)
-
-	if dist > radius:
-		return
-
-	# Complete all matching objectives
-	for obj2 in active_objectives:
-		if obj2.get("status", "pending") != "pending":
-			continue
-		if obj2.get("type", "") != "reach_previous_landing_site":
-			continue
-		obj2["status"] = "completed"
 		if debug:
-			print("[MC-Objectives] Objective completed: reach_previous_landing_site id=", obj2.get("id", ""))
+			print("[MissionObjectives] eval reach_poi id=", oid,
+				" target_poi_id=", target_poi_id,
+				" reached_poi_id=", reached_poi_id)
 
-	# If phase completion expects this, advance
-	#phase_mgr.check_phase_completion_from_previous_landing_site(self)
+		if reached_poi_id != target_poi_id:
+			continue
 
-func any_primary_failed() -> bool:
-	# Returns true if any active (primary) objective has status "failed".
-	for obj in active_objectives:
-		var status := str(obj.get("status", "pending"))
-		if status == "failed":
-			return true
-	return false
+		_mark_completed(obj)
+	
+func _evaluate_rescue_interact(payload: Dictionary) -> void:
+	var completed_target_id := str(payload.get("target_id", ""))
 
-func any_primary_pending() -> bool:
-	# Returns true if any active (primary) objective is still "pending".
-	for obj in active_objectives:
-		var status := str(obj.get("status", "pending"))
-		if status == "pending":
-			return true
-	return false
+	if debug:
+		print("[MissionObjectives] rescue_interaction_completed: target_id=", completed_target_id)
+
+	for obj in _objectives:
+		if str(obj.get("type", "")) != "rescue_interact":
+			continue
+		if str(obj.get("status", "pending")) != "pending":
+			continue
+
+		var oid := str(obj.get("id", ""))
+		var target_id := str(_get_param(obj, "target_id", ""))
+
+		if target_id == "":
+			if debug:
+				print("[MissionObjectives] rescue_interact id=", oid, " has no target_id; skipping")
+			continue
+
+		if debug:
+			print("[MissionObjectives] eval rescue_interact id=", oid,
+				" target_id=", target_id,
+				" completed_target_id=", completed_target_id)
+
+		if completed_target_id != target_id:
+			continue
+
+		_mark_completed(obj)

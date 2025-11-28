@@ -79,6 +79,9 @@ animations = [{
 }]
 
 [node name="VehicleLander" type="RigidBody2D"]
+contact_monitor = true
+max_contacts_reported = 4
+linear_damp = 0.1
 script = ExtResource("1_3ri1r")
 base_thrust_force = 4.0
 base_fuel_burn_rate = 4.0

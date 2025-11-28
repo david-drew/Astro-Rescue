@@ -149,7 +149,6 @@ func _setup_collision() -> void:
 	collision_mask = 1
 	add_to_group("lander")
 
-
 func _physics_process(delta: float) -> void:
 	if not _active:
 		return
@@ -556,3 +555,13 @@ func _play_explosion() -> void:
 	# After final loop, hide the explosion sprite so it doesn't freeze on screen
 	_death_sprite.stop()
 	_death_sprite.visible = false
+
+func reset_for_new_mission() -> void:
+	# Ensure physics is live again.
+	freeze = false
+	sleeping = false
+	linear_velocity = Vector2.ZERO
+	angular_velocity = 0.0
+
+	# Re-enable controls if they were disabled by crash / landing.
+	set_physics_process(true)

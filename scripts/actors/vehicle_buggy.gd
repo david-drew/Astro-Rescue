@@ -36,6 +36,7 @@ var tow_hooks: int = 0
 
 # Optional cached nodes
 @onready var _trailers_root: Node2D = get_node_or_null("TrailerMounts") as Node2D
+@onready var MC := MissionController.new() as MissionController
 
 
 func _ready() -> void:
@@ -44,8 +45,13 @@ func _ready() -> void:
 	floor_snap_length = ground_snap_distance
 	floor_max_angle = deg_to_rad(ground_max_angle_deg)
 	add_to_group("buggy")
+	
+	var eb = EventBus
+	if not eb.is_connected("poi_area_entered", Callable(self, "_on_poi_area_entered")):
+		eb.connect("poi_area_entered", Callable(self, "_on_poi_area_entered"))
 
-
+	if not eb.is_connected("landing_zone_area_entered", Callable(self, "_on_landing_zone_area_entered")):
+		eb.connect("landing_zone_area_entered", Callable(self, "_on_landing_zone_area_entered"))
 
 func set_active(active: bool) -> void:
 	_active = active
@@ -186,3 +192,11 @@ func _update_trailer_follow(delta: float) -> void:
 
 		prev_pos = seg2d.global_position
 		prev_rot = seg2d.rotation
+
+func _on_landing_zone_area_entered(zone_id: String) -> void:
+	MC.on_zone_reached(zone_id)
+	MC.mc_goal.on_zone_reached(zone_id)
+
+func _on_poi_area_entered(poi_id: String) -> void:
+	MC.on_poi_reached(poi_id)
+	MC.mc_goal.on_poi_reached(poi_id)

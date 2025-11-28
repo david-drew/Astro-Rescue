@@ -7,44 +7,6 @@
   "expires_in_days": null,
   "unique": true,
   "reputation_required": 0,
-  "schema_version" : 5,
-  "objectives_version": 2,
-
-  "objectives": [
-	{
-	  "id": "land_safely_in_zone_main",
-	  "type": "landing",
-	  "description": "Land safely inside the main training pad.",
-	  "is_primary": true,
-	  "params": {
-		"target_zone_id": "training_zone_02_main",
-		"max_impact_speed": 42.0
-	  }
-	},
-	{
-	  "id": "drive_to_alt_pad",
-	  "type": "reach_zone",
-	  "description": "Drive the buggy to the alternate pad.",
-	  "is_primary": true,
-	  "params": {
-		"target_zone_id": "training_zone_02_alt",
-		"arrival_radius": 100.0
-	  }
-	},
-	{
-	  "id": "return_to_orbit_after_ground_ops",
-	  "type": "return_to_orbit",
-	  "description": "Re-board the lander and return to orbit.",
-	  "is_primary": true,
-	  "params": {
-		"min_altitude": 8000.0
-	  }
-	}
-  ],
-
-  "completion": {
-	"mode": "all_primary_completed"
-  },
 
   "environment": {
 	"gravity": {
@@ -123,8 +85,22 @@
 	  },
 	  "camera": {
 		"zoom": 0.55
+	  },
+	  "objectives": [
+		{
+		  "id": "land_safely_in_zone_main",
+		  "description": "Land safely inside the main training pad.",
+		  "type": "landing",
+		  "target_zone_id": "training_zone_02_main",
+		  "max_impact_speed": 42.0
+		}
+	  ],
+	  "completion": {
+		"type": "landed_in_zone",
+		"zone_id": "training_zone_02_main"
 	  }
 	},
+
 	{
 	  "id": "buggy_leg",
 	  "mode": "buggy",
@@ -138,8 +114,22 @@
 		"show_altitude": false,
 		"show_fuel": false,
 		"show_wind": false
+	  },
+	  "objectives": [
+		{
+		  "id": "drive_to_alt_pad",
+		  "description": "Drive the buggy to the alternate pad.",
+		  "type": "reach_zone",
+		  "target_zone_id": "training_zone_02_alt",
+		  "arrival_radius": 100.0
+		}
+	  ],
+	  "completion": {
+		"type": "reached_zone",
+		"zone_id": "training_zone_02_alt"
 	  }
 	},
+
 	{
 	  "id": "ascent",
 	  "mode": "lander",
@@ -148,6 +138,18 @@
 	  },
 	  "camera": {
 		"zoom": 0.6
+	  },
+	  "objectives": [
+		{
+		  "id": "return_to_orbit_after_ground_ops",
+		  "description": "Re-board the lander and return to orbit.",
+		  "type": "return_to_orbit",
+		  "min_altitude": 8000.0
+		}
+	  ],
+	  "completion": {
+		"type": "reached_altitude",
+		"target_altitude": 8000.0
 	  }
 	}
   ],

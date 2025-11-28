@@ -418,9 +418,8 @@ func refresh_board_missions_for_hq() -> void:
 	##
 
 	if not GameState.training_complete:
-		print("TRAINING INCOMPLETE (CORRECT)")
 		var tutorials: Array = get_available_training_missions() # returns Array[Dictionary]
-		print("Num Tutorials: ", tutorials.size())
+		#print("Num Tutorials: ", tutorials.size())	# TODO DELETE
 		GameState.available_missions = tutorials
 		if debug_logging:
 			print("[WorldSimManager] HQ refresh: tutorial missions=", tutorials.size())

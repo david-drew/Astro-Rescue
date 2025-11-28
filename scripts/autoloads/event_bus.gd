@@ -59,6 +59,10 @@ signal career_status_changed(new_status: String, reason: String)
 ## career terminated (e.g., rep too low or player death).
 signal career_terminated(reason: String)
 
+# Vehicle Signals
+signal poi_area_entered(poi_id: String)
+signal landing_zone_area_entered(zone_id: String)
+signal on_rescue_interaction_complete(target_id: String)
 
 # -------------------------------------------------------------------
 # Unlocks & Progression

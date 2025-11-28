@@ -7,44 +7,6 @@
   "expires_in_days": null,
   "unique": true,
   "reputation_required": 0,
-  "schema_version" : 5,
-  "objectives_version": 2,
-
-  "objectives": [
-	{
-	  "id": "land_safely_in_zone",
-	  "type": "landing",
-	  "description": "Land safely in the smaller training pad.",
-	  "is_primary": true,
-	  "params": {
-		"target_zone_id": "training_zone_03_main",
-		"max_impact_speed": 10.0
-	  }
-	},
-	{
-	  "id": "stabilize_ranger",
-	  "type": "rescue_interact",
-	  "description": "EVA: walk to the stranded ranger and stabilize them.",
-	  "is_primary": true,
-	  "params": {
-		"target_id": "training_survivor_03",
-		"interaction_time": 5.0
-	  }
-	},
-	{
-	  "id": "return_to_orbit_after_eva",
-	  "type": "return_to_orbit",
-	  "description": "Return to orbit once the EVA is complete.",
-	  "is_primary": true,
-	  "params": {
-		"min_altitude": 11000.0
-	  }
-	}
-  ],
-
-  "completion": {
-	"mode": "all_primary_completed"
-  },
 
   "environment": {
 	"gravity": {
@@ -125,8 +87,22 @@
 	  },
 	  "camera": {
 		"zoom": 0.55
+	  },
+	  "objectives": [
+		{
+		  "id": "land_safely_in_zone",
+		  "description": "Land safely in the smaller training pad.",
+		  "type": "landing",
+		  "target_zone_id": "training_zone_03_main",
+		  "max_impact_speed": 10.0
+		}
+	  ],
+	  "completion": {
+		"type": "landed_in_zone",
+		"zone_id": "training_zone_03_main"
 	  }
 	},
+
 	{
 	  "id": "eva_rescue",
 	  "mode": "rescue",
@@ -141,8 +117,22 @@
 		"show_fuel": false,
 		"show_wind": false,
 		"show_gravity": false
+	  },
+	  "objectives": [
+		{
+		  "id": "stabilize_ranger",
+		  "description": "EVA: walk to the stranded ranger and stabilize them.",
+		  "type": "rescue_interact",
+		  "target_id": "training_survivor_03",
+		  "interaction_time": 5.0
+		}
+	  ],
+	  "completion": {
+		"type": "rescued_target",
+		"target_id": "training_survivor_03"
 	  }
 	},
+
 	{
 	  "id": "ascent",
 	  "mode": "lander",
@@ -151,6 +141,18 @@
 	  },
 	  "camera": {
 		"zoom": 0.6
+	  },
+	  "objectives": [
+		{
+		  "id": "return_to_orbit_after_eva",
+		  "description": "Return to orbit once the EVA is complete.",
+		  "type": "return_to_orbit",
+		  "min_altitude": 11000.0
+		}
+	  ],
+	  "completion": {
+		"type": "reached_altitude",
+		"target_altitude": 11000.0
 	  }
 	}
   ],

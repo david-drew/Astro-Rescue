@@ -6,8 +6,17 @@ signal interacted(target_id: String)
 @export var walk_speed: float = 120.0
 @export var debug_logging: bool = false
 
+@onready var MC := MissionController.new() as MissionController
+
 var _active: bool = false
 
+func _ready():
+	var eb = EventBus
+	if not eb.is_connected("poi_area_entered", Callable(self, "_on_poi_area_entered")):
+		eb.connect("poi_area_entered", Callable(self, "_on_poi_area_entered"))
+
+	if not eb.is_connected("rescue_interaction_complete", Callable(self, "_on_rescue_interaction_complete")):
+		eb.connect("rescue_interaction_complete", Callable(self, "_on_rescue_interaction_complete"))
 
 func set_active(active: bool) -> void:
 	_active = active
@@ -45,3 +54,12 @@ func _get_interactable_target_id() -> String:
 	# TODO: replace with overlap query / nearest interactable
 	# For now, if you already track something, return it here.
 	return ""
+
+# Signals
+func _on_poi_area_entered(poi_id: String) -> void:
+	MC.on_poi_reached(poi_id)
+	MC.mc_goal.on_poi_reached(poi_id)
+
+func _on_rescue_interaction_complete(target_id: String) -> void:
+	MC.on_rescue_interaction_completed(target_id)
+	MC.mc_goal.on_rescue_interaction_completed(target_id)

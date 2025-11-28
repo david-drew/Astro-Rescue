@@ -141,7 +141,7 @@ func initialize(orbital_config: Dictionary) -> void:
 	
 	# Create visual elements
 	_create_planet()
-	_create_lander_sprite()
+	_create_rocket_sprite()
 	_create_landing_zone_markers()
 	
 	# Setup camera
@@ -301,7 +301,7 @@ func _create_simple_planet_texture(sprite: Sprite2D) -> void:
 	sprite.texture = texture
 	sprite.centered = true
 
-func _create_lander_sprite() -> void:
+func _create_rocket_sprite() -> void:
 	rocket_sprite = Sprite2D.new()
 	rocket_sprite.name = "OrbitingLander"
 	add_child(rocket_sprite)
@@ -478,7 +478,15 @@ func _setup_camera() -> void:
 
 func _complete_transition() -> void:
 	_state = State.COMPLETED
-	_activate_lander_camera()
+
+	var _lander = get_node_or_null("/root/Game/World/Player/VehicleLander")
+	if _lander:
+		_lander.reset_for_new_mission()	
+		_activate_lander_camera(_lander)
+	else:
+		push_warning("[MissionController] Lander not ready; cannot activate lander camera.")
+
+	reset()
 	transition_completed.emit()
 	
 	if debug_logging:
@@ -535,21 +543,39 @@ func _hide_pick_zone_prompt() -> void:
 	if _prompt_panel != null:
 		_prompt_panel.visible = false
 
-func _activate_lander_camera() -> void:
+func _activate_lander_camera(_lander:RigidBody2D) -> void:
 	# 1. Disable OrbitalView camera if it exists
 	$OrbitalCamera.enabled = false
 
 	# 2. Enable the Lander’s camera
 	#var _woild = get_node_or_null("/root/Game/World")
-	var _lander = get_node_or_null("/root/Game/World/Player/VehicleLander")
-	if _lander:
-		var lander_cam := _lander.get_node_or_null("LanderCam")
-		if lander_cam:
-			lander_cam.enabled = true
-			lander_cam.make_current()
-			#_woild.visible = true
-			#_lander.visible = true
-		else:
-			push_warning("[MissionController] LanderCamera not found under Lander.")
+	var lander_cam := _lander.get_node_or_null("LanderCam")
+	if lander_cam:
+		lander_cam.enabled = true
+		lander_cam.make_current()
+		#_woild.visible = true
+		#_lander.visible = true
 	else:
-		push_warning("[MissionController] Lander not ready; cannot activate lander camera.")
+		push_warning("[MissionController] LanderCamera not found under Lander.")
+
+func reset():
+	_config = {}  # The orbital_view config from mission JSON
+	_planet_renderer = null
+	_orbital_camera  = null
+
+	_landing_zones  = []  # Array of zone config dictionaries
+	_zone_markers   = []  # Array of LandingZoneMarker nodes
+	_selected_zone_id  = ""
+
+	rocket_sprite         = null
+	rocket_orbit_angle    = 0.0
+	rocket_orbit_radius   = 450.0
+	rocket_orbit_speed    = 0.8
+
+	_planet_center = Vector2.ZERO
+	_planet_radius = 320.0
+
+	_prompt_layer = null
+	_prompt_panel = null
+	_prompt_timer = null
+	_pick_prompt_shown = false

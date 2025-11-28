@@ -54,10 +54,13 @@ debug_logging = true
 
 [node name="MissionController" type="Node" parent="Systems"]
 script = ExtResource("2_iywne")
+debug = null
+auto_end_on_all_primary_complete = null
 terrain_generator_path = NodePath("../../World/TerrainGenerator")
 lander_path = NodePath("../../World/Player/VehicleLander")
 hud_path = NodePath("../../UI/LanderHUD")
 orbital_view_path = NodePath("../../OrbitalView")
+mission_data_dir = null
 mission_file_id = "training_mission_01.json"
 
 [node name="MissionGenerator" type="Node" parent="Systems"]
@@ -142,21 +145,9 @@ script = ExtResource("13_1kice")
 
 [node name="VehicleLander" parent="World/Player" instance=ExtResource("9_kvuet")]
 script = ExtResource("14_bt5mj")
-base_thrust_force = 250.0
-thrust_boost_multiplier = 3.0
-thrust_ramp_enabled = true
-thrust_ramp_duration = 2.0
-thrust_min_factor = 0.25
-turbo_ignores_ramp = true
-gravity_multiplier = 2.0
-fuel_capacity = 200.0
-base_fuel_burn_rate = 6.0
-rotation_accel = 8.0
-base_rotation_torque = 90.0
-safe_vertical_speed = 50.0
-safe_horizontal_speed = 40.0
+base_thrust_force = 200.0
+base_fuel_burn_rate = 12.0
 gravity_field_manager_path = NodePath("../../../Systems/GravityFieldManager")
-game_over_delay_seconds = 3.0
 
 [node name="VehicleBuggy" type="CharacterBody2D" parent="World/Player"]
 visible = false
@@ -204,10 +195,6 @@ visible = false
 
 [node name="LanderHUD" parent="UI" instance=ExtResource("3_lnu2h")]
 custom_minimum_size = Vector2(230, 260)
-is_hud_enabled = null
-requires_equipment = null
-equipment_online = null
-debug_logging = null
 
 [node name="BriefingPanel" type="Control" parent="UI"]
 visible = false
