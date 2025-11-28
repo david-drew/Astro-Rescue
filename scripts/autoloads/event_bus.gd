@@ -62,7 +62,7 @@ signal career_terminated(reason: String)
 # Vehicle Signals
 signal poi_area_entered(poi_id: String)
 signal landing_zone_area_entered(zone_id: String)
-signal on_rescue_interaction_complete(target_id: String)
+signal rescue_interaction_complete(target_id: String)
 
 # -------------------------------------------------------------------
 # Unlocks & Progression
@@ -165,7 +165,7 @@ signal lander_altitude_changed(altitude_meters: float)
 signal lander_stats_updated(stats: Dictionary)
 ## Emitted when the player dismisses the Game Over screen and wants to return to the Launch Menu.
 signal game_over_return_requested()
-
+signal update_player_stats(rep:int, creds:int)
 
 # -------------------------------------------------------------------
 # Optional debug helper

@@ -536,7 +536,10 @@ func _show_pick_zone_prompt() -> void:
 		add_child(_prompt_timer)
 
 	_prompt_panel.visible = true
-	_prompt_timer.start()
+
+	if _prompt_timer and is_instance_valid(_prompt_timer):
+		_prompt_timer.stop()
+		_prompt_timer.start()  # uses existing wait_time
 
 
 func _hide_pick_zone_prompt() -> void:
@@ -558,24 +561,51 @@ func _activate_lander_camera(_lander:RigidBody2D) -> void:
 	else:
 		push_warning("[MissionController] LanderCamera not found under Lander.")
 
-func reset():
+func reset() -> void:
+	##
+	# Full runtime reset so OrbitalView can be reused safely.
+	##
+
+	# 1) Clean up existing visual nodes so they don't linger between runs.
+	if rocket_sprite != null and is_instance_valid(rocket_sprite):
+		rocket_sprite.queue_free()
+	rocket_sprite = null
+
+	# (Landing zone markers are already cleaned up inside _create_landing_zone_markers(),
+	# but it's safe to aggressively reset their array here too.)
+	_zone_markers.clear()
+
+	# 2) Reset core config + state.
 	_config = {}  # The orbital_view config from mission JSON
 	_planet_renderer = null
 	_orbital_camera  = null
 
-	_landing_zones  = []  # Array of zone config dictionaries
-	_zone_markers   = []  # Array of LandingZoneMarker nodes
-	_selected_zone_id  = ""
+	_landing_zones    = []  # Array of zone config dictionaries
+	_selected_zone_id = ""
 
-	rocket_sprite         = null
-	rocket_orbit_angle    = 0.0
-	rocket_orbit_radius   = 450.0
-	rocket_orbit_speed    = 0.8
+	rocket_orbit_angle  = 0.0
+	rocket_orbit_radius = 450.0
+	rocket_orbit_speed  = 0.8
 
 	_planet_center = Vector2.ZERO
 	_planet_radius = 320.0
 
-	_prompt_layer = null
-	_prompt_panel = null
-	_prompt_timer = null
+	# --- Prompt cleanup ---
+	# Hide any visible prompt.
+	_hide_pick_zone_prompt()
+
+	# ---- prompt reset (the important part) ----
+	# Hide the prompt if it’s visible.
+	_hide_pick_zone_prompt()
+
+	# Stop the timer if it exists.
+	if _prompt_timer != null and is_instance_valid(_prompt_timer):
+		_prompt_timer.stop()
+
+	# Allow the banner to show again next mission.
 	_pick_prompt_shown = false
+
+	# Optional but harmless: make sure we're not processing.
+	# (Normally hide_orbital_view() will do this.)
+	set_process(false)
+	_state = State.HIDDEN

@@ -31,14 +31,29 @@ var _current_mode: GameMode = GameMode.LAUNCH_MENU
 @onready var lander_hud: Control      = $UI/LanderHUD
 @onready var briefing_panel: Control  = $UI/BriefingPanel 
 @onready var debrief_panel: Control   = $UI/DebriefPanel 
-
 @onready var game_over_panel: Control = $UI/GameOverPanel
+@onready var pause_menu_panel: Control = $UI/PauseMenuPanel
 
 
 
 func _ready() -> void:
 	_connect_eventbus()
 	_enter_launch_menu()
+	
+	if pause_menu_panel:
+		if pause_menu_panel.has_signal("load_requested"):
+			pause_menu_panel.load_requested.connect(_on_pause_load_requested)
+		if pause_menu_panel.has_signal("save_requested"):
+			pause_menu_panel.save_requested.connect(_on_pause_save_requested)
+		if pause_menu_panel.has_signal("main_menu_requested"):
+			pause_menu_panel.main_menu_requested.connect(_on_pause_main_menu_requested)
+		if pause_menu_panel.has_signal("quit_requested"):
+			pause_menu_panel.quit_requested.connect(_on_pause_quit_requested)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		_on_ui_cancel_pressed()
+
 
 # -------------------------------------------------------------------
 # EventBus wiring
@@ -193,6 +208,9 @@ func _on_new_game_requested() -> void:
 	if debug_logging:
 		print("[Game] new_game_requested")
 
+	# Make sure any existing mission runtime state is cleared first.
+	_reset_mission_runtime_state()
+
 	GameState.reset_profile()
 
 	if MissionRegistry:
@@ -230,7 +248,9 @@ func _on_debrief_return_requested() -> void:
 	if debug_logging:
 		print("[Game] debrief_return_requested")
 
+	_reset_mission_runtime_state()
 	_enter_hq()
+
 
 
 # -------------------------------------------------------------------
@@ -309,4 +329,68 @@ func _enter_game_over(reason: String, result: Dictionary) -> void:
 func _on_game_over_return_requested() -> void:
 	if debug_logging:
 		print("[Game] game_over_return_requested")
+
+	_reset_mission_runtime_state()
 	_enter_launch_menu()
+
+func _on_ui_cancel_pressed() -> void:
+	# Do not show pause menu in Launch Menu.
+	if _current_mode == GameMode.LAUNCH_MENU:
+		return
+
+	if pause_menu_panel:
+		if pause_menu_panel.has_method("toggle_menu"):
+			pause_menu_panel.call("toggle_menu")
+		else:
+			pause_menu_panel.visible = not pause_menu_panel.visible
+
+func _on_pause_load_requested() -> void:
+	if debug_logging:
+		print("[Game] Pause: Load requested (not implemented yet)")
+	# TODO: hook into SaveSystem when ready.
+
+func _on_pause_save_requested() -> void:
+	if debug_logging:
+		print("[Game] Pause: Save requested (not implemented yet)")
+	# TODO: hook into SaveSystem when ready.
+
+func _on_pause_main_menu_requested() -> void:
+	if debug_logging:
+		print("[Game] Pause: Main Menu requested")
+	# For now, just go back to the launch menu.
+	# You *may* want to call _reset_mission_runtime_state() too if leaving mid-mission.
+	_enter_launch_menu()
+
+func _on_pause_quit_requested() -> void:
+	if debug_logging:
+		print("[Game] Pause: Quit requested")
+	get_tree().quit()
+
+
+func _reset_mission_runtime_state() -> void:
+	##
+	# Central place to reset per-mission runtime state so we can safely
+	# start another mission in this session.
+	##
+
+	# 1) MissionController
+	if mission_controller and mission_controller.has_method("reset"):
+		mission_controller.reset()
+
+	# 2) OrbitalView
+	if orbital_view and orbital_view.has_method("reset"):
+		orbital_view.reset()
+
+	# 3) GameState mission variables
+	if GameState and GameState.has_method("clear_current_mission"):
+		GameState.clear_current_mission()
+
+	# 4) Player vehicles (lander for now)
+	var lander: Node = null
+	if GameState and "lander" in GameState.vehicles:
+		lander = GameState.vehicles.lander
+	if lander == null:
+		lander = get_node_or_null("/root/Game/World/Player/VehicleLander")
+
+	if lander and lander.has_method("reset_for_new_mission"):
+		lander.reset_for_new_mission()

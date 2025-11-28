@@ -557,11 +557,31 @@ func _play_explosion() -> void:
 	_death_sprite.visible = false
 
 func reset_for_new_mission() -> void:
-	# Ensure physics is live again.
+	# 1) Ensure physics is live again.
 	freeze = false
 	sleeping = false
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
 
-	# Re-enable controls if they were disabled by crash / landing.
+	# 2) Reset fuel state.
+	_current_fuel = fuel_capacity
+	if fuel_capacity <= 0.0:
+		_current_fuel = 0.0
+
+	_last_fuel_ratio = _get_fuel_ratio()
+	_last_emitted_fuel = _last_fuel_ratio
+
+	# 3) Reset destruction / touchdown flags.
+	_has_sent_touchdown = false
+	_has_sent_destruction = false
+
+	# 4) Restore visuals: show lander sprite, hide death sprite.
+	if _lander_sprite:
+		_lander_sprite.visible = true
+
+	if _death_sprite:
+		_death_sprite.stop()
+		_death_sprite.visible = false
+
+	# 5) Re-enable controls/physics stepping.
 	set_physics_process(true)

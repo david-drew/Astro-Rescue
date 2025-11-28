@@ -54,6 +54,25 @@ func reset_state() -> void:
 	if debug:
 		print("[MissionObjectivesV2] State reset")
 
+func reset() -> void:
+	##
+	# Full reset so this instance can be safely reused for another mission.
+	##
+	_mission_id = ""
+	_objectives.clear()
+
+	_metrics = {
+		"elapsed_time": 0.0,
+		"time_limit": 0.0,
+		"fuel_ratio": 1.0,
+		"max_hull_damage_ratio": 0.0,
+		"crashes": 0,
+		"orbit_reached": false
+	}
+
+	if debug:
+		print("[MissionObjectivesV2] Full reset (mission id and metrics cleared)")
+
 
 func set_metrics(metrics: Dictionary) -> void:
 	for key in _metrics.keys():
@@ -62,7 +81,6 @@ func set_metrics(metrics: Dictionary) -> void:
 
 	if debug:
 		print("[MissionObjectivesV2] Metrics updated: ", _metrics)
-
 
 # High-level event entry point
 func handle_event(event_type: String, payload: Dictionary) -> void:

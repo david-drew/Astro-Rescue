@@ -109,8 +109,11 @@ func reset_profile() -> void:
 	training_progress = 0
 	training_complete = false
 
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("profile_reset", player_profile)
+	EventBus.emit_signal("profile_reset", player_profile)
+	var rep_now: int = int(player_profile.get("reputation", 0))
+	var funds_now: int = int(player_profile.get("funds", 0))
+	EventBus.emit_signal("update_player_stats", rep_now, funds_now)
+
 
 
 func load_profile_from_save(profile_data: Dictionary) -> void:
@@ -123,25 +126,30 @@ func load_profile_from_save(profile_data: Dictionary) -> void:
 	else:
 		player_profile = profile_data.duplicate(true)
 
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("profile_loaded", player_profile)
+	EventBus.emit_signal("profile_loaded", player_profile)
+	var rep_now: int = int(player_profile.get("reputation", 0))
+	var funds_now: int = int(player_profile.get("funds", 0))
+	EventBus.emit_signal("update_player_stats", rep_now, funds_now)
+
 
 
 func get_profile_copy() -> Dictionary:
 	return player_profile.duplicate(true)
 
-
 # -------------------------------------------------------------------
 # Reputation & Funds helpers
 # -------------------------------------------------------------------
+
 
 func change_reputation(delta: int) -> void:
 	var old_rep: int = int(player_profile.get("reputation", 0))
 	var new_rep: int = old_rep + delta
 	player_profile["reputation"] = new_rep
 
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("reputation_changed", new_rep, delta)
+	var funds_now: int = int(player_profile.get("funds", 0))
+
+	EventBus.emit_signal("reputation_changed", new_rep, delta)
+	EventBus.emit_signal("update_player_stats", new_rep, funds_now)
 
 	_check_career_termination_for_reputation()
 
@@ -151,10 +159,13 @@ func set_reputation(value: int) -> void:
 	var delta: int = value - old_rep
 	player_profile["reputation"] = value
 
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("reputation_changed", value, delta)
+	var funds_now: int = int(player_profile.get("funds", 0))
+
+	EventBus.emit_signal("reputation_changed", value, delta)
+	EventBus.emit_signal("update_player_stats", value, funds_now)
 
 	_check_career_termination_for_reputation()
+
 
 
 func change_funds(delta: int) -> void:
@@ -162,8 +173,10 @@ func change_funds(delta: int) -> void:
 	var new_funds: int = old_funds + delta
 	player_profile["funds"] = new_funds
 
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("funds_changed", new_funds, delta)
+	var rep_now: int = int(player_profile.get("reputation", 0))
+
+	EventBus.emit_signal("funds_changed", new_funds, delta)
+	EventBus.emit_signal("update_player_stats", rep_now, new_funds)
 
 
 func set_funds(value: int) -> void:
@@ -171,8 +184,11 @@ func set_funds(value: int) -> void:
 	var delta: int = value - old_funds
 	player_profile["funds"] = value
 
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("funds_changed", value, delta)
+	var rep_now: int = int(player_profile.get("reputation", 0))
+
+	EventBus.emit_signal("funds_changed", value, delta)
+	EventBus.emit_signal("update_player_stats", rep_now, value)
+
 
 
 func _check_career_termination_for_reputation() -> void:
@@ -192,10 +208,9 @@ func _set_career_status(new_status: String, reason: String = "") -> void:
 
 	player_profile["career_status"] = new_status
 
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("career_status_changed", new_status, reason)
-		if new_status == "terminated":
-			EventBus.emit_signal("career_terminated", reason)
+	EventBus.emit_signal("career_status_changed", new_status, reason)
+	if new_status == "terminated":
+		EventBus.emit_signal("career_terminated", reason)
 
 
 # -------------------------------------------------------------------
@@ -207,8 +222,7 @@ func unlock_lander(lander_id: String) -> void:
 	if not arr.has(lander_id):
 		arr.append(lander_id)
 		player_profile["unlocked_lander_ids"] = arr
-		if Engine.has_singleton("EventBus"):
-			EventBus.emit_signal("lander_unlocked", lander_id)
+		EventBus.emit_signal("lander_unlocked", lander_id)
 
 
 func unlock_crew(crew_id: String) -> void:
@@ -216,8 +230,7 @@ func unlock_crew(crew_id: String) -> void:
 	if not arr.has(crew_id):
 		arr.append(crew_id)
 		player_profile["unlocked_crew_ids"] = arr
-		if Engine.has_singleton("EventBus"):
-			EventBus.emit_signal("crew_unlocked", crew_id)
+		EventBus.emit_signal("crew_unlocked", crew_id)
 
 
 func unlock_mission_tag(tag: String) -> void:
@@ -225,8 +238,7 @@ func unlock_mission_tag(tag: String) -> void:
 	if not arr.has(tag):
 		arr.append(tag)
 		player_profile["unlocked_mission_tags"] = arr
-		if Engine.has_singleton("EventBus"):
-			EventBus.emit_signal("mission_tag_unlocked", tag)
+		EventBus.emit_signal("mission_tag_unlocked", tag)
 
 
 # -------------------------------------------------------------------
@@ -237,17 +249,20 @@ func set_current_mission_config(config: Dictionary) -> void:
 	current_mission_config = config.duplicate(true)
 	_mission_counter += 1
 
-	if Engine.has_singleton("EventBus"):
-		var mission_id: String = current_mission_config.get("id", "")
-		EventBus.emit_signal("mission_config_set", mission_id, current_mission_config)
+	var mission_id: String = current_mission_config.get("id", "")
+	EventBus.emit_signal("mission_config_set", mission_id, current_mission_config)
 
 
 func clear_current_mission() -> void:
+	# Clear all mission-specific runtime state, but keep career/profile intact.
+	current_mission_id = ""
+	landing_zone_id = ""
+
 	current_mission_config.clear()
 	current_mission_result.clear()
 
-	if Engine.has_singleton("EventBus"):
-		EventBus.emit_signal("mission_cleared")
+	EventBus.emit_signal("mission_cleared")
+
 
 
 # -------------------------------------------------------------------

@@ -563,7 +563,7 @@ func _on_lander_altitude_changed(altitude_meters: float) -> void:
 		return
 
 	var required_altitude: float = mc_goal.get_return_to_orbit_min_altitude()
-	var req_altitude_meters = required_altitude / 3 - 1500.0
+	var req_altitude_meters = required_altitude / 3 - 500.0
 
 	# TODO DELETE
 	#print("\t...........................Now we want this altitude: ", req_altitude_meters, " vs ", altitude_meters)
@@ -713,19 +713,6 @@ func _evaluate_end_condition_objectives() -> void:
 	mc_goal.evaluate_fuel_remaining_objectives()
 	mc_goal.evaluate_no_damage_objectives()
 
-func _debug_dump_objectives_state(label: String) -> void:
-	if not debug:
-		return
-
-	print("[MissionController] Objective state at ", label)
-	print("\tauto_end_on_all_primary_complete = ", auto_end_on_all_primary_complete)
-	for obj in mc_goal.active_objectives:
-		var id := str(obj.get("id", ""))
-		var type := str(obj.get("type", ""))
-		var status := str(obj.get("status", "pending"))
-		var is_primary:bool = obj.get("is_primary", true)
-		print("\t- id=", id, " type=", type, " primary=", is_primary, " status=", status)
-
 func _update_objectives_metrics() -> void:
 	if mc_goal == null:
 		return
@@ -766,13 +753,19 @@ func reset():
 	_orbit_reached_time     = 0.0
 	_orbit_reached_altitude = 0.0
 
+	# Make sure the landing helper's state doesn't leak between missions.
+	if mc_landing != null:
+		mc_landing.landing_successful = false
+		mc_landing.crashes_count = 0
+		mc_landing.max_hull_damage_ratio = 0.0
+
 	# _rewards = {} 			# TODO: Rewards must be PROCESSED before reset
 	
-	mc_phase.reset()
+	#mc_phase.reset()
 	mc_goal.reset()
-	mc_landing.reset()
-	mc_setup.reset()
-	mc_orbit.reset()
-	mc_result.reset()
+	#mc_landing.reset()
+	#mc_setup.reset()
+	#mc_orbit.reset()
+	#mc_result.reset()
 	
 	

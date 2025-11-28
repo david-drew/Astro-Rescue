@@ -1,4 +1,4 @@
-[gd_scene load_steps=32 format=3 uid="uid://dhwbgfm0d7vpi"]
+[gd_scene load_steps=34 format=3 uid="uid://dhwbgfm0d7vpi"]
 
 [ext_resource type="Script" uid="uid://cqj2hsg7f8ycf" path="res://scripts/game.gd" id="1_yqjtg"]
 [ext_resource type="Script" uid="uid://c5k1dh5ok7a3d" path="res://scripts/missions/mission_controller.gd" id="2_iywne"]
@@ -26,6 +26,7 @@
 [ext_resource type="Texture2D" uid="uid://b77h8ypucmvjl" path="res://assets/images/eva_01.png" id="18_pl11u"]
 [ext_resource type="Script" uid="uid://cxbs5wdb1b8do" path="res://scripts/ui/debrief_panel.gd" id="19_1kice"]
 [ext_resource type="Script" uid="uid://lu3npj2ytttp" path="res://scripts/ui/game_over_panel.gd" id="26_bhx41"]
+[ext_resource type="Script" uid="uid://cruyc0vqsdrws" path="res://scripts/ui/pause_menu_panel.gd" id="27_qnb83"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_pl11u"]
 size = Vector2(133, 36)
@@ -44,6 +45,9 @@ width = 1200
 height = 600
 fill_from = Vector2(0.13675214, 0.11965812)
 fill_to = Vector2(0.6666667, 0.8803419)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_qnb83"]
+bg_color = Color(0.18431373, 0.1882353, 0.25882354, 0.8901961)
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_yqjtg")
@@ -404,3 +408,72 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 32
 text = "Restart"
+
+[node name="PauseMenuPanel" type="Control" parent="UI"]
+self_modulate = Color(0.029506557, 0.029506557, 0.029506557, 1)
+z_index = 5
+custom_minimum_size = Vector2(180, 300)
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -121.5
+offset_top = -186.5
+offset_right = 121.5
+offset_bottom = 186.5
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+script = ExtResource("27_qnb83")
+
+[node name="Panel" type="Panel" parent="UI/PauseMenuPanel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -176.0
+offset_top = -250.0
+offset_right = 76.5
+offset_bottom = 90.5
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_qnb83")
+
+[node name="VBox" type="VBoxContainer" parent="UI/PauseMenuPanel/Panel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -91.0
+offset_top = -112.0
+offset_right = 91.0
+offset_bottom = 112.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="LoadButton" type="Button" parent="UI/PauseMenuPanel/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Load"
+
+[node name="SaveButton" type="Button" parent="UI/PauseMenuPanel/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Save"
+
+[node name="MainMenuButton" type="Button" parent="UI/PauseMenuPanel/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Main Menu"
+
+[node name="QuitButton" type="Button" parent="UI/PauseMenuPanel/Panel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Quit"
