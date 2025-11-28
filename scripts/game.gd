@@ -248,6 +248,7 @@ func _on_debrief_return_requested() -> void:
 	if debug_logging:
 		print("[Game] debrief_return_requested")
 
+	_finalize_mission_and_reset()
 	_reset_mission_runtime_state()
 	_enter_hq()
 
@@ -330,6 +331,7 @@ func _on_game_over_return_requested() -> void:
 	if debug_logging:
 		print("[Game] game_over_return_requested")
 
+	_finalize_mission_and_reset()
 	_reset_mission_runtime_state()
 	_enter_launch_menu()
 
@@ -394,3 +396,17 @@ func _reset_mission_runtime_state() -> void:
 
 	if lander and lander.has_method("reset_for_new_mission"):
 		lander.reset_for_new_mission()
+
+func _finalize_mission_and_reset() -> void:
+	##
+	# Apply mission rewards/penalties to the career profile,
+	# then reset mission runtime state so we can safely start another mission.
+	##
+	if GameState:
+		var result: Dictionary = GameState.current_mission_result
+		if not result.is_empty():
+			GameState.apply_mission_result(result)
+
+	# Now that rewards are applied, clear runtime mission state.
+	if has_method("_reset_mission_runtime_state"):
+		_reset_mission_runtime_state()

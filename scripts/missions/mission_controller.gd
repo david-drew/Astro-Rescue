@@ -215,6 +215,8 @@ func _load_mission_config() -> void:
 
 	_failure_rules = mission_config.get("failure_rules", {})
 	_rewards = mission_config.get("rewards", {})
+	
+	print("[MC] Loaded mission_config.rewards for ", _mission_id, ": ", _rewards)	# TODO DELETE
 
 	# -------------------------
 	# v1.4 Phases + Objectives

@@ -17,6 +17,7 @@ func _ready() -> void:
 
 
 func _on_update_player_stats(rep: int, creds: int) -> void:
+	print("[StatsPanel] update_player_stats rep=%d creds=%d" % [rep, creds])
 	_update_labels(rep, creds)
 
 func _update_labels(rep: int, creds: int) -> void:

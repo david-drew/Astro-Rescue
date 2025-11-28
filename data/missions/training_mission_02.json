@@ -154,7 +154,9 @@
 
   "rewards": {
 	"base_credits": 750,
-	"bonus_credits": 100
+	"bonus_credits": 100,
+	"base_reputation": 15,
+	"bonus_reputation": 5
   },
 
   "orbital_view": {

@@ -132,7 +132,6 @@ func load_profile_from_save(profile_data: Dictionary) -> void:
 	EventBus.emit_signal("update_player_stats", rep_now, funds_now)
 
 
-
 func get_profile_copy() -> Dictionary:
 	return player_profile.duplicate(true)
 
@@ -286,6 +285,7 @@ func apply_mission_result(result: Dictionary) -> void:
 	#   - player_died: bool
 	#   - (optionally: objective breakdown, etc.)
 	##
+	print("[GameState] apply_mission_result called. result=%s" % [str(result)])
 	if current_mission_config.is_empty():
 		push_warning("GameState.apply_mission_result called but current_mission_config is empty.")
 		return
@@ -318,7 +318,7 @@ func apply_mission_result(result: Dictionary) -> void:
 		player_profile["failed_missions"] = failed
 
 	# Resolve rewards
-	_apply_mission_rewards(success_state)
+	_apply_mission_rewards(success_state,result)
 
 	# Player death → career termination
 	if player_died:
@@ -331,39 +331,57 @@ func apply_mission_result(result: Dictionary) -> void:
 	EventBus.emit_signal("mission_result_applied", mission_id, success_state, current_mission_result)
 
 
-func _apply_mission_rewards(success_state: String) -> void:
-	var rewards: Dictionary = current_mission_config.get("rewards", {})
+func _apply_mission_rewards(success_state: String, result: Dictionary) -> void:
+	var config_rewards: Dictionary = current_mission_config.get("rewards", {})
 
-	var rep_rewards: Dictionary = rewards.get("reputation", {})
-	var funds_rewards: Dictionary = rewards.get("funds", {})
+	var rep_rewards_cfg: Dictionary   = config_rewards.get("reputation", {})
+	var funds_rewards_cfg: Dictionary = config_rewards.get("funds", {})
 
 	var rep_delta: int = 0
 	var funds_delta: int = 0
 
 	match success_state:
 		"success":
-			rep_delta = int(rep_rewards.get("on_success", 0))
-			funds_delta = int(funds_rewards.get("on_success", 0))
+			rep_delta   += int(rep_rewards_cfg.get("on_success", 0))
+			funds_delta += int(funds_rewards_cfg.get("on_success", 0))
 		"partial":
-			rep_delta = int(rep_rewards.get("on_partial", 0))
-			funds_delta = int(funds_rewards.get("on_partial", 0))
+			rep_delta   += int(rep_rewards_cfg.get("on_partial", 0))
+			funds_delta += int(funds_rewards_cfg.get("on_partial", 0))
 		"fail":
-			rep_delta = int(rep_rewards.get("on_fail", 0))
-			funds_delta = int(funds_rewards.get("on_fail", 0))
+			rep_delta   += int(rep_rewards_cfg.get("on_fail", 0))
+			funds_delta += int(funds_rewards_cfg.get("on_fail", 0))
 		_:
-			# Unknown state → treat as failure
-			rep_delta = int(rep_rewards.get("on_fail", 0))
-			funds_delta = int(funds_rewards.get("on_fail", 0))
+			rep_delta   += int(rep_rewards_cfg.get("on_fail", 0))
+			funds_delta += int(funds_rewards_cfg.get("on_fail", 0))
+
+	# Result-based rewards (base_*/bonus_* from mission result)
+	var result_rewards: Dictionary = result.get("rewards", {})
+	if not result_rewards.is_empty():
+		# Credits
+		var base_credits: float  = float(result_rewards.get("base_credits", 0.0))
+		var bonus_credits: float = float(result_rewards.get("bonus_credits", 0.0))
+		var total_credits: int   = int(round(base_credits + bonus_credits))
+		funds_delta += total_credits
+
+		# Reputation
+		var base_rep: float  = float(result_rewards.get("base_reputation", 0.0))
+		var bonus_rep: float = float(result_rewards.get("bonus_reputation", 0.0))
+		var total_rep: int   = int(round(base_rep + bonus_rep))
+		rep_delta += total_rep
+
+	print("[GameState] _apply_mission_rewards state=%s rep_delta=%d funds_delta=%d" %
+		[success_state, rep_delta, funds_delta])
 
 	if rep_delta != 0:
 		change_reputation(rep_delta)
 	if funds_delta != 0:
 		change_funds(funds_delta)
 
-	# Unlock tags
-	var unlock_tags: Array = current_mission_config.get("rewards", {}).get("unlock_tags", [])
+	var unlock_tags: Array = config_rewards.get("unlock_tags", [])
 	for tag in unlock_tags:
 		unlock_mission_tag(tag)
+
+
 
 
 # -------------------------------------------------------------------

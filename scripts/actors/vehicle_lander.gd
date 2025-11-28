@@ -37,15 +37,15 @@ var _thrust_hold_time: float = 0.0
 @export var base_rotation_torque: float = 150.0			# 80 = slow but usable
 
 @export_category("Landing Safety")
-@export var safe_vertical_speed: float = 50.0
-@export var safe_horizontal_speed: float = 40.0
+@export var safe_vertical_speed: float = 40.0
+@export var safe_horizontal_speed: float = 30.0
 @export var safe_tilt_deg: float = 20.0
 @export var safe_upright_check_duration: float = 1.5
 
 @export_category("Destruction Thresholds")
-@export var destroy_vertical_speed: float = 40.0
-@export var destroy_horizontal_speed: float = 40.0
-@export var destroy_velocity_magnitude: float = 40.0
+@export var destroy_vertical_speed: float = 60.0
+@export var destroy_horizontal_speed: float = 50.0
+@export var destroy_velocity_magnitude: float = 65.0
 @export var hard_crash_always_fatal: bool = true
 
 @export_category("Landing Zone / Debug")
@@ -94,6 +94,8 @@ var _touchdown_settle_timer: float = 0.0
 var _touchdown_pending: bool = false
 var _pending_touchdown_body: Node = null
 
+var orig_collision_layer:int = 0
+var orig_collision_mask:int = 0
 
 var _active: bool = true
 
@@ -129,6 +131,9 @@ func _ready() -> void:
 
 	collision_layer = 2
 	collision_mask = 1
+	orig_collision_layer = collision_layer
+	orig_collision_mask  = collision_mask
+
 	add_to_group("lander")
 
 	if weather_controller_path != NodePath(""):
@@ -269,55 +274,16 @@ func apply_controls(delta: float) -> void:
 		var fuel_consumed: float = base_fuel_burn_rate * thrust_input * fuel_mult * delta
 		_current_fuel = max(0.0, _current_fuel - fuel_consumed)
 
-
-
-	'''
-	var thrust_input: float = Input.get_action_strength("lander_thrust")
-	var turbo_pressed: bool = Input.is_action_pressed("lander_turbo")
-
-	var rotate_right: float = Input.get_action_strength("lander_rotate_right")
-	var rotate_left: float = Input.get_action_strength("lander_rotate_left")
-	var rotate_input: float = rotate_right - rotate_left
-
-	if rotate_input != 0.0:
-		var new_ang_vel: float = angular_velocity + rotate_input * rotation_accel * delta
-		angular_velocity = clampf(new_ang_vel, -max_angular_speed, max_angular_speed)
-	elif rotation_drag > 0.0:
-		var drag_step: float = rotation_drag * delta
-		if angular_velocity > 0.0:
-			angular_velocity = max(0.0, angular_velocity - drag_step)
-		elif angular_velocity < 0.0:
-			angular_velocity = min(0.0, angular_velocity + drag_step)
-
-	if allow_turbo and turbo_pressed:
-		thrust_input = max(thrust_input, 1.0)
-
-	if thrust_input > 0.0 and _current_fuel > 0.0:
-		var thrust_multiplier: float = 1.0
-		var fuel_mult: float = 1.0
-
-		if allow_turbo and turbo_pressed:
-			thrust_multiplier += turbo_thrust_multiplier
-			fuel_mult = turbo_fuel_multiplier
-
-		var thrust_force: float = base_thrust_force * thrust_input * thrust_multiplier
-		var thrust_vector: Vector2 = Vector2(0.0, -1.0).rotated(rotation) * thrust_force
-
-		apply_central_impulse(thrust_vector * delta)
-
-		var fuel_consumed: float = base_fuel_burn_rate * thrust_input * fuel_mult * delta
-		_current_fuel = max(0.0, _current_fuel - fuel_consumed)
-		_last_fuel_ratio = _get_fuel_ratio()
-		_update_fuel_ratio()
-	'''
-
-
 # -------------------------------------------------------------------
 # Landing / destruction (from your snippet)
 # -------------------------------------------------------------------
 
 func _on_body_entered(body: Node) -> void:
 	if not _active:
+		return
+	
+	# TODO: Adjust for other collisions (weather, valid objects, etc.)
+	if not (body.is_in_group("terrain") or body.is_in_group("ground")):
 		return
 
 	if body.is_in_group("terrain") or body.is_in_group("ground"):
@@ -329,9 +295,9 @@ func _on_body_entered(body: Node) -> void:
 
 		if v_vert > destroy_vertical_speed or v_horiz > destroy_horizontal_speed or speed > destroy_velocity_magnitude:
 			_handle_destruction("high_speed_impact", {
-				"speed": speed,
-				"vertical_speed": v_vert,
-				"horizontal_speed": v_horiz
+					"speed": speed,
+					"vertical_speed": v_vert,
+					"horizontal_speed": v_horiz
 			})
 		elif v_vert <= safe_vertical_speed * 1.5 and v_horiz <= safe_horizontal_speed * 1.5:
 			# Potential landing; start settle check rather than deciding instantly
@@ -350,13 +316,22 @@ func _on_body_entered(body: Node) -> void:
 func _finalize_touchdown() -> void:
 	_touchdown_pending = false
 
-	# Recompute with current velocities after settle
 	var touchdown_data := get_landing_state()
-	if touchdown_data.get("successful", false):
+	var successful:bool = touchdown_data.get("successful", false)
+	var hull_ratio: float = float(touchdown_data.get("hull_damage_ratio", 0.0))
+
+	if successful:
 		_handle_safe_landing()
 	else:
-		# For now keep your behavior: fatal on bad landing
-		_handle_destruction("hard_landing", touchdown_data)
+		# Decide if this is a rough but non-fatal landing.
+		if hull_ratio >= 1.0:
+			_handle_destruction("hard_landing", touchdown_data)
+		else:
+			# Non-fatal rough landing: emit touchdown with success = false
+			# so MissionLanding can track a "crash", but do NOT explode.
+			EventBus.emit_signal("touchdown", touchdown_data)
+			emit_signal("touchdown", touchdown_data)
+
 
 
 func _handle_safe_landing() -> void:
@@ -420,6 +395,10 @@ func _handle_destruction(cause: String, context: Dictionary) -> void:
 	if debug_logging:
 		print("[VehicleLander] Destruction: cause=", cause, " context=", context)
 
+	# Prevent further collisions right away.
+	collision_layer = 0
+	collision_mask = 0
+
 	# 1) Immediately stop this body from being simulated as a normal lander
 	set_physics_process(false)
 
@@ -440,6 +419,7 @@ func _handle_destruction(cause: String, context: Dictionary) -> void:
 			break
 	'''
 
+	# Need call_deffered() or similar to wrap these
 	freeze = true
 	lock_rotation = true
 	_active = false
@@ -554,6 +534,7 @@ func _play_explosion() -> void:
 
 	# After final loop, hide the explosion sprite so it doesn't freeze on screen
 	_death_sprite.stop()
+	_death_sprite.scale = Vector2(1.0,1.0)
 	_death_sprite.visible = false
 
 func reset_for_new_mission() -> void:
@@ -562,6 +543,9 @@ func reset_for_new_mission() -> void:
 	sleeping = false
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
+	
+	collision_layer = orig_collision_layer
+	collision_mask  = orig_collision_mask
 
 	# 2) Reset fuel state.
 	_current_fuel = fuel_capacity
@@ -574,8 +558,15 @@ func reset_for_new_mission() -> void:
 	# 3) Reset destruction / touchdown flags.
 	_has_sent_touchdown = false
 	_has_sent_destruction = false
+	_touchdown_pending = false
+	_touchdown_settle_timer = 0.0
+	_pending_touchdown_body = null
 
-	# 4) Restore visuals: show lander sprite, hide death sprite.
+	# Reset HUD-related counters so signals don't get "stuck".
+	_hud_frame_counter = 0
+	_last_emitted_altitude = _get_altitude_meters()
+
+	# 4) Restore visuals.
 	if _lander_sprite:
 		_lander_sprite.visible = true
 
@@ -583,5 +574,6 @@ func reset_for_new_mission() -> void:
 		_death_sprite.stop()
 		_death_sprite.visible = false
 
-	# 5) Re-enable controls/physics stepping.
-	set_physics_process(true)
+	# 5) Re-enable controls/physics stepping via set_active().
+	# This also restores visibility and process_mode coherently.
+	set_active(true)
