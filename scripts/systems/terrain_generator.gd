@@ -459,6 +459,7 @@ func _apply_landing_zones_improved(points: Array, terrain_config: Dictionary) ->
 		var actual_difficulty: String = _calculate_landing_zone_difficulty(points, indices_in_zone, avg_y)
 
 		_landing_zones_info[zone_id] = {
+			"id": zone_id,
 			"center_x": center_x,
 			"width": width,
 			"surface_y": avg_y,
@@ -763,7 +764,7 @@ func _create_landing_zone_collider(zone_info: Dictionary) -> void:
 	
 	# ADD THESE LINES after creating the area:
 	area.collision_layer = 4   # Layer 3 for landing zones
-	area.collision_mask = 2    # Detect layer 2 (lander)
+	area.collision_mask = 2 | 1    # detect lander (2) and buggy (1)
 	area.monitoring = true
 	area.monitorable = true
 
@@ -785,7 +786,7 @@ func _create_landing_zone_collider(zone_info: Dictionary) -> void:
 	_terrain_root.add_child(area)
 
 func _on_landing_zone_body_entered(body: Node2D, zone_id: String, zone_info: Dictionary) -> void:
-
+	# Lander touchdown classification (existing behavior)
 	if body.is_in_group("lander") or body is LanderController:
 		var impact_data := {}
 		if body.has_method("get_landing_state"):
@@ -799,19 +800,25 @@ func _on_landing_zone_body_entered(body: Node2D, zone_id: String, zone_info: Dic
 				"impact_data": impact_data
 			}
 
-			# Emit with complete data
 			EventBus.emit_signal("touchdown", touchdown_payload)
 			EventBus.emit_signal("lander_entered_landing_zone", zone_id, zone_info)
-			#EventBus.emit_signal("touchdown", zone_id, zone_info)
+		return
 
+	# Surface ops: buggy / EVA entering a landing zone
+	if body.is_in_group("buggy") or body.is_in_group("eva"):
+		# Treat landing zones as POI-style targets for reach_zone objectives
+		EventBus.emit_signal("poi_entered", zone_id, zone_info)
 
 func _on_landing_zone_body_exited(body: Node2D, zone_id: String, zone_info: Dictionary) -> void:
 	if body.is_in_group("lander") or body is LanderController:
 		EventBus.emit_signal("lander_exited_landing_zone", zone_id, zone_info)
+		return
+
+	if body.is_in_group("buggy") or body.is_in_group("eva"):
+		EventBus.emit_signal("poi_exited", zone_id, zone_info)
 
 
 # POI Markers
-
 func _create_poi_marker_colliders(poi_markers: Array) -> void:
 	if poi_markers.is_empty():
 		return

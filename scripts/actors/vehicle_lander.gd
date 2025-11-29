@@ -598,3 +598,24 @@ func _handle_safe_landing() -> void:
 
 	EventBus.emit_signal("touchdown", touchdown_data)
 	emit_signal("touchdown", touchdown_data)
+
+func can_exit_to_surface() -> bool:
+	# Must have completed a touchdown sequence (safe or rough)
+	if not _has_sent_touchdown:
+		return false
+
+	# Require low motion
+	var speed: float = linear_velocity.length()
+	if speed > 5.0:
+		return false
+
+	# Require low spin
+	if abs(angular_velocity) > 0.5:
+		return false
+
+	# Require roughly upright within landing-safe tilt
+	var tilt_deg: float = abs(rad_to_deg(rotation))
+	if tilt_deg > safe_tilt_deg:
+		return false
+
+	return true

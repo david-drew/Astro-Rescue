@@ -680,17 +680,17 @@ func _end_mission(success_state: String, reason: String) -> void:
 # UPDATE: _show_landing_gameplay() in mission_controller.gd
 # ==================================================================
 
-func _on_poi_entered(poi_id: String, poi_info: Dictionary) -> void:
+func on_poi_entered(poi_id: String, poi_info: Dictionary) -> void:
 	if _mission_state != "running":
 		return
 
 	mc_goal.on_poi_entered(poi_id)
 	mc_phase.check_phase_completion_from_poi(poi_id)
 
-func _on_poi_exited(poi_id: String, poi_info: Dictionary) -> void:
+func on_poi_exited(poi_id: String, poi_info: Dictionary) -> void:
 	mc_goal.on_poi_exited(poi_id)
 
-func _on_eva_interacted(target_id: String) -> void:
+func on_eva_interacted(target_id: String) -> void:
 	if _mission_state != "running":
 		return
 

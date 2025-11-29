@@ -1,4 +1,4 @@
-[gd_scene load_steps=34 format=3 uid="uid://dhwbgfm0d7vpi"]
+[gd_scene load_steps=36 format=3 uid="uid://dhwbgfm0d7vpi"]
 
 [ext_resource type="Script" uid="uid://cqj2hsg7f8ycf" path="res://scripts/game.gd" id="1_yqjtg"]
 [ext_resource type="Script" uid="uid://c5k1dh5ok7a3d" path="res://scripts/missions/mission_controller.gd" id="2_iywne"]
@@ -27,12 +27,13 @@
 [ext_resource type="Script" uid="uid://cxbs5wdb1b8do" path="res://scripts/ui/debrief_panel.gd" id="19_1kice"]
 [ext_resource type="Script" uid="uid://lu3npj2ytttp" path="res://scripts/ui/game_over_panel.gd" id="26_bhx41"]
 [ext_resource type="Script" uid="uid://cruyc0vqsdrws" path="res://scripts/ui/pause_menu_panel.gd" id="27_qnb83"]
+[ext_resource type="Script" uid="uid://btdh4fi7jxo6v" path="res://scripts/ui/surface_ops_dialogue.gd" id="28_sww3w"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_pl11u"]
-size = Vector2(133, 36)
+size = Vector2(68, 21)
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_bhx41"]
-radius = 17.029387
+radius = 8.0
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_qnb83"]
 height = 58.0
@@ -48,6 +49,8 @@ fill_to = Vector2(0.6666667, 0.8803419)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_qnb83"]
 bg_color = Color(0.18431373, 0.1882353, 0.25882354, 0.8901961)
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_sww3w"]
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_yqjtg")
@@ -142,9 +145,12 @@ z_index = 1
 z_index = 2
 
 [node name="Player" type="Node2D" parent="World"]
+z_index = 200
 script = ExtResource("13_1kice")
+surface_ops_dialog_path = NodePath("../../UI/SurfaceOpsDialogue")
 
 [node name="VehicleLander" parent="World/Player" instance=ExtResource("9_kvuet")]
+z_index = 200
 script = ExtResource("14_bt5mj")
 base_thrust_force = 250.0
 thrust_boost_multiplier = 3.0
@@ -167,26 +173,30 @@ game_over_delay_seconds = 3.0
 
 [node name="VehicleBuggy" type="CharacterBody2D" parent="World/Player"]
 visible = false
+z_index = 200
+collision_layer = 2
+collision_mask = 3
 script = ExtResource("14_37s47")
 
 [node name="Sprite2D" type="Sprite2D" parent="World/Player/VehicleBuggy"]
-scale = Vector2(0.5, 0.5)
+scale = Vector2(0.25, 0.25)
 texture = ExtResource("16_e1j6l")
 
 [node name="BodyCollider" type="CollisionShape2D" parent="World/Player/VehicleBuggy"]
-position = Vector2(-2.5, -6)
+position = Vector2(0, -2.5)
 shape = SubResource("RectangleShape2D_pl11u")
 
 [node name="WheelFrontCollider" type="CollisionShape2D" parent="World/Player/VehicleBuggy"]
-position = Vector2(57, 18)
+position = Vector2(28, 9)
 shape = SubResource("CircleShape2D_bhx41")
 
 [node name="WheelBackCollider" type="CollisionShape2D" parent="World/Player/VehicleBuggy"]
-position = Vector2(-47, 18)
+position = Vector2(-24, 9)
 shape = SubResource("CircleShape2D_bhx41")
 
 [node name="VehicleEVA" type="CharacterBody2D" parent="World/Player"]
 visible = false
+z_index = 200
 script = ExtResource("14_5newe")
 
 [node name="Sprite2D" type="Sprite2D" parent="World/Player/VehicleEVA"]
@@ -413,6 +423,7 @@ theme_override_font_sizes/font_size = 32
 text = "Restart"
 
 [node name="PauseMenuPanel" type="Control" parent="UI"]
+visible = false
 self_modulate = Color(0.029506557, 0.029506557, 0.029506557, 1)
 z_index = 5
 custom_minimum_size = Vector2(180, 300)
@@ -481,24 +492,74 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "Quit"
 
-[node name="BuggyTest" type="Node2D" parent="."]
+[node name="SurfaceOpsDialogue" type="Control" parent="UI"]
+custom_minimum_size = Vector2(400, 250)
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -150.0
+offset_right = 200.0
+offset_bottom = 100.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("28_sww3w")
 
-[node name="VehicleBuggy" type="CharacterBody2D" parent="BuggyTest"]
-visible = false
-script = ExtResource("14_37s47")
+[node name="Panel" type="Panel" parent="UI/SurfaceOpsDialogue"]
+self_modulate = Color(0.19793734, 0.19793719, 0.19793722, 0.9019608)
+custom_minimum_size = Vector2(400, 250)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
 
-[node name="Sprite2D" type="Sprite2D" parent="BuggyTest/VehicleBuggy"]
-scale = Vector2(0.5, 0.5)
-texture = ExtResource("16_e1j6l")
+[node name="MarginContainer" type="MarginContainer" parent="UI/SurfaceOpsDialogue/Panel"]
+custom_minimum_size = Vector2(400, 250)
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
 
-[node name="BodyCollider" type="CollisionShape2D" parent="BuggyTest/VehicleBuggy"]
-position = Vector2(-2.5, -6)
-shape = SubResource("RectangleShape2D_pl11u")
+[node name="VBox" type="VBoxContainer" parent="UI/SurfaceOpsDialogue/Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="WheelFrontCollider" type="CollisionShape2D" parent="BuggyTest/VehicleBuggy"]
-position = Vector2(57, 18)
-shape = SubResource("CircleShape2D_bhx41")
+[node name="Label" type="Label" parent="UI/SurfaceOpsDialogue/Panel/MarginContainer/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Deploy Vehicle"
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="WheelBackCollider" type="CollisionShape2D" parent="BuggyTest/VehicleBuggy"]
-position = Vector2(-47, 18)
-shape = SubResource("CircleShape2D_bhx41")
+[node name="VSeparator" type="VSeparator" parent="UI/SurfaceOpsDialogue/Panel/MarginContainer/VBox"]
+custom_minimum_size = Vector2(0, 15)
+layout_mode = 2
+theme_override_styles/separator = SubResource("StyleBoxEmpty_sww3w")
+
+[node name="EjectButton" type="Button" parent="UI/SurfaceOpsDialogue/Panel/MarginContainer/VBox"]
+custom_minimum_size = Vector2(180, 50)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 24
+text = "Eject Vehicle"
+
+[node name="CancelButton" type="Button" parent="UI/SurfaceOpsDialogue/Panel/MarginContainer/VBox"]
+custom_minimum_size = Vector2(180, 50)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 24
+text = "Cancel"
