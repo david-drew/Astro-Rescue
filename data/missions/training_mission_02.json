@@ -7,7 +7,7 @@
   "expires_in_days": null,
   "unique": true,
   "reputation_required": 0,
-  "schema_version" : 5,
+  "schema_version": 5,
   "objectives_version": 2,
 
   "objectives": [
@@ -204,5 +204,13 @@
 	  "planet_flatten_start_altitude": 8000.0,
 	  "planet_flatten_end_altitude": 2000.0
 	}
+  },
+
+  "surface_ops": {
+	"enabled": true,
+	"modes": ["buggy"],
+	"default_mode": "buggy",
+	"terrain_profile_id": "moon_training_surface_v1",
+	"spawn_profile_id": "moon_training_surface_v1"
   }
 }

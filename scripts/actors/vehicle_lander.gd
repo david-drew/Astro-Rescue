@@ -94,6 +94,8 @@ var _touchdown_settle_timer: float = 0.0
 var _touchdown_pending: bool = false
 var _pending_touchdown_body: Node = null
 
+var _touchdown_snapshot: Dictionary = {}
+var _touchdown_failed_during_settle: bool = false
 var orig_collision_layer:int = 0
 var orig_collision_mask:int = 0
 
@@ -177,6 +179,12 @@ func _physics_process(delta: float) -> void:
 
 	if _touchdown_pending:
 		_touchdown_settle_timer += delta
+
+		# If the lander tips too far during the settle window, mark it as failed.
+		var tilt_deg: float = abs(rad_to_deg(rotation))
+		if tilt_deg > upright_angle_limit_for_check:
+			_touchdown_failed_during_settle = true
+
 		if _touchdown_settle_timer >= safe_upright_check_duration:
 			_finalize_touchdown()
 
@@ -281,72 +289,71 @@ func apply_controls(delta: float) -> void:
 func _on_body_entered(body: Node) -> void:
 	if not _active:
 		return
-	
-	# TODO: Adjust for other collisions (weather, valid objects, etc.)
+
+	# If we've already resolved a landing or destruction, ignore further contacts.
+	if _has_sent_destruction or _has_sent_touchdown:
+		return
+
 	if not (body.is_in_group("terrain") or body.is_in_group("ground")):
 		return
 
-	if body.is_in_group("terrain") or body.is_in_group("ground"):
-		var v: Vector2 = linear_velocity
-		var speed: float = v.length()
+	var v: Vector2 = linear_velocity
+	var speed: float = v.length()
+	var v_vert: float = abs(v.y)
+	var v_horiz: float = abs(v.x)
 
-		var v_vert: float = abs(v.y)
-		var v_horiz: float = abs(v.x)
+	# 1) Fatal impact: above destroy thresholds → immediate destruction.
+	if v_vert >= destroy_vertical_speed or v_horiz >= destroy_horizontal_speed or speed >= destroy_velocity_magnitude:
+		_touchdown_pending = false
+		_touchdown_failed_during_settle = false
+		_touchdown_snapshot = {}
 
-		if v_vert > destroy_vertical_speed or v_horiz > destroy_horizontal_speed or speed > destroy_velocity_magnitude:
-			_handle_destruction("high_speed_impact", {
-					"speed": speed,
-					"vertical_speed": v_vert,
-					"horizontal_speed": v_horiz
-			})
-		elif v_vert <= safe_vertical_speed * 1.5 and v_horiz <= safe_horizontal_speed * 1.5:
-			# Potential landing; start settle check rather than deciding instantly
-			_touchdown_pending = true
-			_touchdown_settle_timer = 0.0
-			_pending_touchdown_body = body
+		_handle_destruction("high_speed_impact", {
+			"speed": speed,
+			"vertical_speed": v_vert,
+			"horizontal_speed": v_horiz
+		})
+		return
 
-		else:
-			_handle_destruction("hard_landing", {
-				"speed": speed,
-				"vertical_speed": v_vert,
-				"horizontal_speed": v_horiz
-			})
+	# 2) Non-fatal impact: start settle window and snapshot landing state.
+	_touchdown_pending = true
+	_touchdown_settle_timer = 0.0
+	_pending_touchdown_body = body
+	_touchdown_failed_during_settle = false
+
+	# Snapshot at impact; classification later uses this
+	_touchdown_snapshot = get_landing_state()
+
 
 
 func _finalize_touchdown() -> void:
 	_touchdown_pending = false
 
-	var touchdown_data := get_landing_state()
-	var successful:bool = touchdown_data.get("successful", false)
+	# Use the snapshot captured at impact so classification matches what the player saw.
+	var touchdown_data: Dictionary = _touchdown_snapshot.duplicate()
+	var successful: bool = bool(touchdown_data.get("successful", false))
 	var hull_ratio: float = float(touchdown_data.get("hull_damage_ratio", 0.0))
 
-	if successful:
-		_handle_safe_landing()
-	else:
-		# Decide if this is a rough but non-fatal landing.
-		if hull_ratio >= 1.0:
-			_handle_destruction("hard_landing", touchdown_data)
-		else:
-			# Non-fatal rough landing: emit touchdown with success = false
-			# so MissionLanding can track a "crash", but do NOT explode.
-			EventBus.emit_signal("touchdown", touchdown_data)
-			emit_signal("touchdown", touchdown_data)
-
-
-
-func _handle_safe_landing() -> void:
-	if _has_sent_touchdown:
+	if _touchdown_failed_during_settle:
+		# Landed then tipped over during settle – treat as fatal for now.
+		_touchdown_failed_during_settle = false
+		_handle_destruction("topple_during_settle", touchdown_data)
 		return
 
-	_has_sent_touchdown = true
+	if successful:
+		_touchdown_failed_during_settle = false
+		_handle_safe_landing()
+		return
 
-	if debug_logging:
-		print("[VehicleLander] Safe touchdown!")
+	# Not successful: decide between rough-but-survivable and fatal crash
+	_touchdown_failed_during_settle = false
 
-	var touchdown_data: Dictionary = get_landing_state()
-
-	EventBus.emit_signal("touchdown", touchdown_data)
-	emit_signal("touchdown", touchdown_data)
+	if hull_ratio >= 1.0:
+		# Severe over-speed relative to destroy thresholds → fatal.
+		_handle_destruction("hard_landing", touchdown_data)
+	else:
+		# Rough but survivable landing: no explosion, but report it as a failed landing.
+		_handle_rough_landing(touchdown_data)
 
 
 func get_landing_state(_terrain_generator: Node = null, zone_id: String = "", zone_info: Dictionary = {}) -> Dictionary:
@@ -358,19 +365,16 @@ func get_landing_state(_terrain_generator: Node = null, zone_id: String = "", zo
 
 	# Allow a bit of margin above the "safe" speeds for a successful landing.
 	# This keeps truly gentle landings easy, but doesn't require absurd precision.
-	var success_vert_limit: float = safe_vertical_speed * 1.3
-	var success_horiz_limit: float = safe_horizontal_speed * 1.3
-
 	var successful: bool = (
-		v_vert <= success_vert_limit and
-		v_horiz <= success_horiz_limit and
+		v_vert <= safe_vertical_speed and
+		v_horiz <= safe_horizontal_speed and
 		tilt_deg <= safe_tilt_deg
 	)
 
 	var hull_damage_ratio: float = 0.0
 	if not successful:
 		var over_speed: float = max(
-			max(v_vert - success_vert_limit, v_horiz - success_horiz_limit),
+			max(v_vert - safe_vertical_speed, v_horiz - safe_horizontal_speed),
 			0.0
 		)
 		hull_damage_ratio = clamp(over_speed / max(destroy_vertical_speed, 1.0), 0.0, 1.0)
@@ -386,20 +390,20 @@ func get_landing_state(_terrain_generator: Node = null, zone_id: String = "", zo
 		"hull_damage_ratio": hull_damage_ratio
 	}
 
-
 func _handle_destruction(cause: String, context: Dictionary) -> void:
 	if _has_sent_destruction:
 		return
+	
 	_has_sent_destruction = true
+	_touchdown_pending = false
+	_touchdown_failed_during_settle = false
+
+	collision_layer = 0
+	collision_mask = 0
 
 	if debug_logging:
 		print("[VehicleLander] Destruction: cause=", cause, " context=", context)
 
-	# Prevent further collisions right away.
-	collision_layer = 0
-	collision_mask = 0
-
-	# 1) Immediately stop this body from being simulated as a normal lander
 	set_physics_process(false)
 
 	PhysicsServer2D.body_set_state(get_rid(), PhysicsServer2D.BODY_STATE_LINEAR_VELOCITY, Vector2.ZERO)
@@ -407,39 +411,21 @@ func _handle_destruction(cause: String, context: Dictionary) -> void:
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
 
-	'''
-	for i in range(3):
-		await get_tree().physics_frame
-		PhysicsServer2D.body_set_state(get_rid(), PhysicsServer2D.BODY_STATE_LINEAR_VELOCITY, Vector2.ZERO)
-		PhysicsServer2D.body_set_state(get_rid(), PhysicsServer2D.BODY_STATE_ANGULAR_VELOCITY, 0.0)
-
-		if not freeze:
-			linear_velocity = Vector2.ZERO
-			angular_velocity = 0.0
-			break
-	'''
-
-	# Need call_deffered() or similar to wrap these
-	freeze = true
-	lock_rotation = true
 	_active = false
 	set_process(false)
 
-	# 2) Play the explosion while the mission is still "running" and the world is visible
 	await _play_explosion()
 
-	# 3) Optional extra pause before Game Over (tweak in inspector)
 	if game_over_delay_seconds > 0.0:
 		var timer := get_tree().create_timer(game_over_delay_seconds)
 		await timer.timeout
 
-	# 4) Now tell the rest of the game that the lander (and possibly player) is gone.
-	#    This will cause MissionController to end the mission and Game to switch to GAME_OVER.
 	EventBus.emit_signal("lander_destroyed", cause, context)
 	emit_signal("destroyed", cause, context)
 
 	if hard_crash_always_fatal:
 		EventBus.emit_signal("player_died", "lander_crash_" + cause, context)
+
 
 
 # -------------------------------------------------------------------
@@ -543,9 +529,6 @@ func reset_for_new_mission() -> void:
 	sleeping = false
 	linear_velocity = Vector2.ZERO
 	angular_velocity = 0.0
-	
-	collision_layer = orig_collision_layer
-	collision_mask  = orig_collision_mask
 
 	# 2) Reset fuel state.
 	_current_fuel = fuel_capacity
@@ -561,12 +544,18 @@ func reset_for_new_mission() -> void:
 	_touchdown_pending = false
 	_touchdown_settle_timer = 0.0
 	_pending_touchdown_body = null
+	_touchdown_snapshot = {}
+	_touchdown_failed_during_settle = false
 
-	# Reset HUD-related counters so signals don't get "stuck".
+	# 4) Reset HUD-related counters.
 	_hud_frame_counter = 0
 	_last_emitted_altitude = _get_altitude_meters()
 
-	# 4) Restore visuals.
+	# 5) Restore collisions.
+	collision_layer = orig_collision_layer
+	collision_mask  = orig_collision_mask
+
+	# 6) Restore visuals.
 	if _lander_sprite:
 		_lander_sprite.visible = true
 
@@ -574,6 +563,38 @@ func reset_for_new_mission() -> void:
 		_death_sprite.stop()
 		_death_sprite.visible = false
 
-	# 5) Re-enable controls/physics stepping via set_active().
-	# This also restores visibility and process_mode coherently.
+	# 7) Re-enable processing and activation.
 	set_active(true)
+
+func _handle_rough_landing(touchdown_data: Dictionary) -> void:
+	# Prevent double-processing of touchdown.
+	if _has_sent_touchdown:
+		return
+
+	_has_sent_touchdown = true
+	_touchdown_pending = false
+
+	if debug_logging:
+		print("[VehicleLander] Rough but survivable landing")
+
+	var rough_data: Dictionary = touchdown_data.duplicate()
+	rough_data["successful"] = false
+
+	EventBus.emit_signal("touchdown", rough_data)
+	emit_signal("touchdown", rough_data)
+
+func _handle_safe_landing() -> void:
+	if _has_sent_touchdown:
+		return
+
+	_has_sent_touchdown = true
+	_touchdown_pending = false
+	_touchdown_failed_during_settle = false
+
+	if debug_logging:
+		print("[VehicleLander] Safe touchdown!")
+
+	var touchdown_data: Dictionary = get_landing_state()
+
+	EventBus.emit_signal("touchdown", touchdown_data)
+	emit_signal("touchdown", touchdown_data)

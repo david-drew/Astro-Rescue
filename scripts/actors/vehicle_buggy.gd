@@ -33,15 +33,20 @@ var tow_hooks: int = 0
 @export var ground_snap_distance: float = 6.0
 @export var ground_max_angle_deg: float = 45.0
 
+# Jump tuning (speed-influenced)
+@export var jump_base_strength: float = 380.0         # Base upward impulse
+@export var jump_speed_bonus: float = 180.0           # Extra based on horizontal speed
+@export var max_jump_speed_scale: float = 1.2         # How much of _max_speed affects jump
+@export var jump_cooldown: float = 0.15               # Small cooldown to avoid input spam
+
+var _jump_timer: float = 0.0
 
 # Optional cached nodes
 @onready var _trailers_root: Node2D = get_node_or_null("TrailerMounts") as Node2D
-@onready var MC := MissionController.new() as MissionController
 
 
 func _ready() -> void:
 	# Enable CharacterBody2D built-in floor snapping.
-	# Uses existing ground_snap_distance (no duplication).
 	floor_snap_length = ground_snap_distance
 	floor_max_angle = deg_to_rad(ground_max_angle_deg)
 	add_to_group("buggy")
@@ -52,6 +57,16 @@ func _ready() -> void:
 
 	if not eb.is_connected("landing_zone_area_entered", Callable(self, "_on_landing_zone_area_entered")):
 		eb.connect("landing_zone_area_entered", Callable(self, "_on_landing_zone_area_entered"))
+
+
+func _physics_process(delta: float) -> void:
+	# NOTE: Movement is driven by Player.apply_controls(delta) calling apply_controls().
+	# We only tick the jump cooldown here so it works regardless of caller.
+	if _jump_timer > 0.0:
+		_jump_timer -= delta
+		if _jump_timer < 0.0:
+			_jump_timer = 0.0
+
 
 func set_active(active: bool) -> void:
 	_active = active
@@ -65,7 +80,7 @@ func set_active(active: bool) -> void:
 
 
 func apply_vehicle_phase(phase: Dictionary) -> void:
-	# phase["vehicle"] is expected (we enforced in schema)
+	# phase["vehicle"] is expected (schema-driven)
 	var veh: Dictionary = phase.get("vehicle", {})
 	_vehicle_type = str(veh.get("type", "dune_buggy"))
 	_trailer_segments = int(veh.get("trailer_segments", 0))
@@ -108,14 +123,15 @@ func _apply_profile(vehicle_type: String, trailers: int, profile: Dictionary) ->
 	_update_trailers(trailers)
 
 	if debug_logging:
-		print("[VehicleBuggy] Applied profile type=", vehicle_type, " trailers=", trailers, " seats=", seats, " cargo=", cargo_slots)
+		print("[VehicleBuggy] Applied profile type=%s trailers=%d seats=%d cargo=%d"
+			% [_vehicle_type, trailers, seats, cargo_slots])
 
 
 func _update_trailers(trailers: int) -> void:
 	if _trailers_root == null:
 		return
 
-	# Expect children named Segment0, Segment1 (optional pool)
+	# Expect children named Segment0, Segment1... (optional pool)
 	for i in range(_trailers_root.get_child_count()):
 		var seg := _trailers_root.get_child(i)
 		if seg is Node:
@@ -135,19 +151,23 @@ func apply_controls(delta: float) -> void:
 	var back: float = Input.get_action_strength("buggy_back")
 	var turn_r: float = Input.get_action_strength("buggy_turn_right")
 	var turn_l: float = Input.get_action_strength("buggy_turn_left")
+	var jump_pressed: bool = Input.is_action_just_pressed("buggy_jump")
+	var brake_pressed: bool = Input.is_action_pressed("buggy_brake")
 
 	var throttle: float = forward - back
 	var turn: float = turn_r - turn_l
 
-	var brake_pressed: bool = Input.is_action_pressed("buggy_brake")
-	if brake_pressed:
-		velocity = velocity.move_toward(Vector2.ZERO, _brake * 2.5 * delta)
-		move_and_slide()
-		return
-
 	# Steering
 	if turn != 0.0:
 		rotation += turn * _turn_speed * delta
+
+	# Braking
+	if brake_pressed:
+		velocity = velocity.move_toward(Vector2.ZERO, _brake * 2.5 * delta)
+		_apply_gravity(delta)
+		_update_trailer_follow(delta)
+		move_and_slide()
+		return
 
 	# Accel / brake along forward vector (works for forward AND reverse)
 	if throttle != 0.0:
@@ -160,12 +180,48 @@ func apply_controls(delta: float) -> void:
 	else:
 		velocity = velocity.move_toward(Vector2.ZERO, _brake * delta)
 
-	# Simple gravity
-	if not is_on_floor():
-		velocity.y += gravity_strength * delta
+	# Jump (speed-influenced, only from floor)
+	if jump_pressed:
+		_try_jump()
+
+	# Gravity if airborne
+	_apply_gravity(delta)
 
 	_update_trailer_follow(delta)
 	move_and_slide()
+
+
+func _apply_gravity(delta: float) -> void:
+	if not is_on_floor():
+		velocity.y += gravity_strength * delta
+
+
+func _try_jump() -> void:
+	if _jump_timer > 0.0:
+		return
+
+	# Require contact with floor (or very close to it) to jump
+	if not is_on_floor():
+		return
+
+	# Horizontal speed along the forward axis
+	var forward_dir: Vector2 = Vector2.RIGHT.rotated(rotation)
+	var horizontal_speed: float = velocity.dot(forward_dir)
+
+	var speed_scale: float = 0.0
+	if _max_speed > 0.0:
+		speed_scale = clamp(abs(horizontal_speed) / _max_speed, 0.0, max_jump_speed_scale)
+
+	# Upwards in world space (against gravity)
+	var jump_vy: float = -jump_base_strength - jump_speed_bonus * speed_scale
+	velocity.y = jump_vy
+
+	_jump_timer = jump_cooldown
+
+	if debug_logging:
+		print("[VehicleBuggy] Jump fired: speed=%.2f scale=%.2f vy=%.2f"
+			% [horizontal_speed, speed_scale, jump_vy])
+
 
 func _update_trailer_follow(delta: float) -> void:
 	if _trailers_root == null:
@@ -193,10 +249,34 @@ func _update_trailer_follow(delta: float) -> void:
 		prev_pos = seg2d.global_position
 		prev_rot = seg2d.rotation
 
+
+# -------------------------------------------------------------------
+# EventBus handlers – integrate with existing MissionController hooks
+# -------------------------------------------------------------------
+
 func _on_landing_zone_area_entered(zone_id: String) -> void:
-	MC.on_zone_reached(zone_id)
-	MC.mc_goal.on_zone_reached(zone_id)
+	# Buggy reached a landing zone (like training_zone_02_alt).
+	# For now, treat this as a POI arrival and use existing poi_entered flow.
+	if debug_logging:
+		print("[VehicleBuggy] Landing zone area entered: ", zone_id)
+
+	emit_signal("arrived_at_zone", zone_id)
+
+	# MissionController already listens to EventBus "poi_entered" and forwards to mc_goal.
+	EventBus.emit_signal("poi_entered", zone_id, {
+		"source": "buggy",
+		"type": "landing_zone"
+	})
+
 
 func _on_poi_area_entered(poi_id: String) -> void:
-	MC.on_poi_reached(poi_id)
-	MC.mc_goal.on_poi_reached(poi_id)
+	# Generic POI reached by buggy (equipment, towers, etc.)
+	if debug_logging:
+		print("[VehicleBuggy] POI area entered: ", poi_id)
+
+	emit_signal("arrived_at_poi", poi_id)
+
+	EventBus.emit_signal("poi_entered", poi_id, {
+		"source": "buggy",
+		"type": "poi"
+	})

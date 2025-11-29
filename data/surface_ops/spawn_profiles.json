@@ -1,0 +1,12 @@
+{
+  "moon_training_surface_v1": {
+	"global": {
+	  "min_distance_from_start": 300.0,
+	  "max_distance_from_end": 800.0,
+	  "avoid_cluster_with_start": true
+	},
+	"rules": {
+
+	}
+  }
+}

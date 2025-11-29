@@ -157,8 +157,11 @@ fuel_capacity = 200.0
 base_fuel_burn_rate = 6.0
 rotation_accel = 8.0
 base_rotation_torque = 90.0
-safe_vertical_speed = 50.0
-safe_horizontal_speed = 40.0
+safe_vertical_speed = 40.0
+safe_horizontal_speed = 30.0
+destroy_vertical_speed = 60.0
+destroy_horizontal_speed = 50.0
+destroy_velocity_magnitude = 65.0
 gravity_field_manager_path = NodePath("../../../Systems/GravityFieldManager")
 game_over_delay_seconds = 3.0
 
@@ -477,3 +480,25 @@ text = "Main Menu"
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "Quit"
+
+[node name="BuggyTest" type="Node2D" parent="."]
+
+[node name="VehicleBuggy" type="CharacterBody2D" parent="BuggyTest"]
+visible = false
+script = ExtResource("14_37s47")
+
+[node name="Sprite2D" type="Sprite2D" parent="BuggyTest/VehicleBuggy"]
+scale = Vector2(0.5, 0.5)
+texture = ExtResource("16_e1j6l")
+
+[node name="BodyCollider" type="CollisionShape2D" parent="BuggyTest/VehicleBuggy"]
+position = Vector2(-2.5, -6)
+shape = SubResource("RectangleShape2D_pl11u")
+
+[node name="WheelFrontCollider" type="CollisionShape2D" parent="BuggyTest/VehicleBuggy"]
+position = Vector2(57, 18)
+shape = SubResource("CircleShape2D_bhx41")
+
+[node name="WheelBackCollider" type="CollisionShape2D" parent="BuggyTest/VehicleBuggy"]
+position = Vector2(-47, 18)
+shape = SubResource("CircleShape2D_bhx41")
