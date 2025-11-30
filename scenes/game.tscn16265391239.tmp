@@ -1,0 +1,330 @@
+[gd_scene load_steps=31 format=3 uid="uid://dhwbgfm0d7vpi"]
+
+[ext_resource type="Script" uid="uid://cqj2hsg7f8ycf" path="res://scripts/game.gd" id="1_yqjtg"]
+[ext_resource type="Script" uid="uid://c5k1dh5ok7a3d" path="res://scripts/systems/mission_controller.gd" id="2_iywne"]
+[ext_resource type="Script" uid="uid://g14ia5c1b88u" path="res://scripts/environment/environment_controller.gd" id="2_lnu2h"]
+[ext_resource type="PackedScene" uid="uid://bdgb0ypkjrnjf" path="res://scenes/ui/lander_hud.tscn" id="3_lnu2h"]
+[ext_resource type="Script" uid="uid://cmax4i8cxq0bs" path="res://scripts/systems/mission_generator.gd" id="3_p57ef"]
+[ext_resource type="Script" uid="uid://djwu11yaup5w4" path="res://scripts/systems/time_manager.gd" id="4_vtaks"]
+[ext_resource type="Script" uid="uid://dpmne3xck4w6u" path="res://scripts/systems/gravity_field_manager.gd" id="5_ir15t"]
+[ext_resource type="Script" uid="uid://d2oejgl6y8no6" path="res://scripts/systems/terrain_generator.gd" id="5_u5sy4"]
+[ext_resource type="Script" uid="uid://dks52o1po2ct0" path="res://scripts/systems/world_sim_manager.gd" id="7_kvpfn"]
+[ext_resource type="Script" uid="uid://q0dt8qvd5kct" path="res://scripts/environment/star_layer_2d.gd" id="8_dinhu"]
+[ext_resource type="Script" uid="uid://cocxcfft2ah1x" path="res://scripts/debug/mission_spawn_manager.gd" id="8_kvuet"]
+[ext_resource type="PackedScene" uid="uid://ct8c084jmt55y" path="res://scenes/lander.tscn" id="9_kvuet"]
+[ext_resource type="Script" uid="uid://dpu5dqcqk4dls" path="res://scripts/systems/terrain_tiles_controller.gd" id="9_trtic"]
+[ext_resource type="PackedScene" uid="uid://ceum4ki43unsg" path="res://scenes/ui/launch_menu.tscn" id="10_dinhu"]
+[ext_resource type="PackedScene" uid="uid://b3v5xi2iht5kv" path="res://scenes/ui/hq.tscn" id="12_trtic"]
+[ext_resource type="Script" uid="uid://dr8he4hddc0tr" path="res://scripts/actors/player.gd" id="13_1kice"]
+[ext_resource type="Script" uid="uid://dac1odxjscqoj" path="res://scripts/ui/orbital_camera.gd" id="13_ca42v"]
+[ext_resource type="Script" uid="uid://b6qwot2ywuy7p" path="res://scripts/orbital_view.gd" id="13_rysoc"]
+[ext_resource type="Script" uid="uid://dwv7thkegjgmv" path="res://scripts/actors/vehicle_eva.gd" id="14_5newe"]
+[ext_resource type="Script" uid="uid://llbywr7c72h6" path="res://scripts/actors/vehicle_buggy.gd" id="14_37s47"]
+[ext_resource type="Script" uid="uid://d34qoorinjw64" path="res://scripts/actors/vehicle_lander.gd" id="14_bt5mj"]
+[ext_resource type="Texture2D" uid="uid://ck6yjbnwghqyd" path="res://assets/images/moon_buggy_01.png" id="16_e1j6l"]
+[ext_resource type="Script" uid="uid://d0lbtyoe4gywb" path="res://scripts/ui/briefing_panel.gd" id="18_264po"]
+[ext_resource type="Texture2D" uid="uid://b77h8ypucmvjl" path="res://assets/images/eva_01.png" id="18_pl11u"]
+[ext_resource type="Script" uid="uid://cxbs5wdb1b8do" path="res://scripts/ui/debrief_panel.gd" id="19_1kice"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_pl11u"]
+size = Vector2(133, 36)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_bhx41"]
+radius = 17.029387
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_qnb83"]
+height = 58.0
+
+[sub_resource type="Gradient" id="Gradient_kvuet"]
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_trtic"]
+gradient = SubResource("Gradient_kvuet")
+width = 1200
+height = 600
+fill_from = Vector2(0.13675214, 0.11965812)
+fill_to = Vector2(0.6666667, 0.8803419)
+
+[node name="Game" type="Node2D"]
+script = ExtResource("1_yqjtg")
+use_orbital_view = true
+debug_logging = true
+
+[node name="Systems" type="Node" parent="."]
+
+[node name="MissionController" type="Node" parent="Systems"]
+script = ExtResource("2_iywne")
+debug_logging = true
+terrain_generator_path = NodePath("../../World/TerrainGenerator")
+terrain_tiles_controller_path = NodePath("../TerrainTilesController")
+lander_path = NodePath("../../World/Player/VehicleLander")
+hud_path = NodePath("../../UI/LanderHUD")
+orbital_view_path = NodePath("../../OrbitalView")
+mission_file_id = "training_mission_01.json"
+
+[node name="MissionGenerator" type="Node" parent="Systems"]
+script = ExtResource("3_p57ef")
+
+[node name="TimeManager" type="Node" parent="Systems"]
+script = ExtResource("4_vtaks")
+
+[node name="EnvironmentController" type="Node" parent="Systems"]
+script = ExtResource("2_lnu2h")
+base_default_gravity = 30.0
+wind_controller_path = NodePath("../WeatherController")
+
+[node name="WeatherController" type="Node" parent="Systems"]
+
+[node name="WorldSimManager" type="Node" parent="Systems"]
+script = ExtResource("7_kvpfn")
+
+[node name="MissionSpawnManager" type="Node" parent="Systems"]
+script = ExtResource("8_kvuet")
+
+[node name="TerrainTilesController" type="Node" parent="Systems"]
+script = ExtResource("9_trtic")
+
+[node name="GravityFieldManager" type="Node2D" parent="Systems"]
+script = ExtResource("5_ir15t")
+
+[node name="World" type="Node2D" parent="."]
+
+[node name="StarfieldBG" type="ParallaxBackground" parent="World"]
+scroll_ignore_camera_zoom = true
+
+[node name="TheVoid" type="ColorRect" parent="World/StarfieldBG"]
+offset_right = 40.0
+offset_bottom = 40.0
+color = Color(0, 0, 0, 1)
+
+[node name="StarFieldFar" type="ParallaxLayer" parent="World/StarfieldBG"]
+motion_scale = Vector2(0.17, 0.17)
+motion_mirroring = Vector2(3440, 1440)
+
+[node name="StarLayer2D" type="Node2D" parent="World/StarfieldBG/StarFieldFar"]
+script = ExtResource("8_dinhu")
+
+[node name="StarFieldMid" type="ParallaxLayer" parent="World/StarfieldBG"]
+motion_scale = Vector2(0.35, 0.35)
+motion_mirroring = Vector2(3440, 1440)
+
+[node name="StarLayer2D" type="Node2D" parent="World/StarfieldBG/StarFieldMid"]
+script = ExtResource("8_dinhu")
+star_count = 300
+color_jitter = 0.12
+allow_twinkle = true
+
+[node name="StarFieldNear" type="ParallaxLayer" parent="World/StarfieldBG"]
+motion_scale = Vector2(0.6, 0.6)
+motion_mirroring = Vector2(3440, 1440)
+
+[node name="StarLayer2D" type="Node2D" parent="World/StarfieldBG/StarFieldNear"]
+script = ExtResource("8_dinhu")
+star_count = 200
+color_jitter = 0.18
+allow_twinkle = true
+
+[node name="TerrainGenerator" type="Node2D" parent="World"]
+script = ExtResource("5_u5sy4")
+terrain_root_path = NodePath(".")
+terrain_color = Color(0.5788521, 0.66061723, 0.78350806, 1)
+debug_logging = true
+
+[node name="BGTiles" type="TileMapLayer" parent="World/TerrainGenerator"]
+z_index = -10
+
+[node name="SurfaceTiles" type="TileMapLayer" parent="World/TerrainGenerator"]
+z_index = 1
+
+[node name="LandingDecoTiles" type="TileMapLayer" parent="World/TerrainGenerator"]
+z_index = 2
+
+[node name="Player" type="Node2D" parent="World"]
+script = ExtResource("13_1kice")
+lander_path = null
+buggy_path = null
+eva_path = null
+
+[node name="VehicleLander" parent="World/Player" instance=ExtResource("9_kvuet")]
+script = ExtResource("14_bt5mj")
+base_thrust_force = 200.0
+base_fuel_burn_rate = 12.0
+gravity_field_manager_path = NodePath("../../../Systems/GravityFieldManager")
+
+[node name="VehicleBuggy" type="CharacterBody2D" parent="World/Player"]
+visible = false
+script = ExtResource("14_37s47")
+
+[node name="Sprite2D" type="Sprite2D" parent="World/Player/VehicleBuggy"]
+scale = Vector2(0.5, 0.5)
+texture = ExtResource("16_e1j6l")
+
+[node name="BodyCollider" type="CollisionShape2D" parent="World/Player/VehicleBuggy"]
+position = Vector2(-2.5, -6)
+shape = SubResource("RectangleShape2D_pl11u")
+
+[node name="WheelFrontCollider" type="CollisionShape2D" parent="World/Player/VehicleBuggy"]
+position = Vector2(57, 18)
+shape = SubResource("CircleShape2D_bhx41")
+
+[node name="WheelBackCollider" type="CollisionShape2D" parent="World/Player/VehicleBuggy"]
+position = Vector2(-47, 18)
+shape = SubResource("CircleShape2D_bhx41")
+
+[node name="VehicleEVA" type="CharacterBody2D" parent="World/Player"]
+visible = false
+script = ExtResource("14_5newe")
+
+[node name="Sprite2D" type="Sprite2D" parent="World/Player/VehicleEVA"]
+scale = Vector2(0.25, 0.25)
+texture = ExtResource("18_pl11u")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Player/VehicleEVA"]
+shape = SubResource("CapsuleShape2D_qnb83")
+
+[node name="OrbitalView" type="Node2D" parent="."]
+script = ExtResource("13_rysoc")
+
+[node name="OrbitalCamera" type="Camera2D" parent="OrbitalView"]
+script = ExtResource("13_ca42v")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="LaunchMenu" parent="UI" instance=ExtResource("10_dinhu")]
+
+[node name="HQ" parent="UI" instance=ExtResource("12_trtic")]
+visible = false
+
+[node name="LanderHUD" parent="UI" instance=ExtResource("3_lnu2h")]
+custom_minimum_size = Vector2(230, 260)
+
+[node name="BriefingPanel" type="Control" parent="UI"]
+visible = false
+self_modulate = Color(1, 1, 1, 0.78431374)
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 6
+size_flags_vertical = 6
+script = ExtResource("18_264po")
+
+[node name="TextureRect" type="TextureRect" parent="UI/BriefingPanel"]
+modulate = Color(0.20392157, 0.44313726, 0.58431375, 0.84705883)
+self_modulate = Color(0.3764706, 0.58431375, 1, 0.8627451)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = SubResource("GradientTexture2D_trtic")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/BriefingPanel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -600.0
+offset_top = -280.0
+offset_right = 600.0
+offset_bottom = 280.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 20
+
+[node name="TitleLabel" type="Label" parent="UI/BriefingPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "Mission Title"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DescriptionLabel" type="Label" parent="UI/BriefingPanel/VBoxContainer"]
+custom_minimum_size = Vector2(1100, 400)
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="LaunchButton" type="Button" parent="UI/BriefingPanel/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 32
+text = "Launch"
+
+[node name="DebriefPanel" type="Control" parent="UI"]
+visible = false
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+size_flags_horizontal = 6
+size_flags_vertical = 6
+script = ExtResource("19_1kice")
+
+[node name="TextureRect" type="TextureRect" parent="UI/DebriefPanel"]
+modulate = Color(0.20392157, 0.44313726, 0.58431375, 0.84705883)
+self_modulate = Color(0.3764706, 0.58431375, 1, 0.8627451)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -580.0
+offset_top = -280.0
+offset_right = 580.0
+offset_bottom = 280.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = SubResource("GradientTexture2D_trtic")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="UI/DebriefPanel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -600.0
+offset_top = -280.0
+offset_right = 600.0
+offset_bottom = 280.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 20
+
+[node name="TitleLabel" type="Label" parent="UI/DebriefPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "Mission Title"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="OutcomeLabel" type="Label" parent="UI/DebriefPanel/VBoxContainer"]
+custom_minimum_size = Vector2(1100, 400)
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="DetailsRichText" type="RichTextLabel" parent="UI/DebriefPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="ReturnButton" type="Button" parent="UI/DebriefPanel/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 32
+text = "Return to HQ"

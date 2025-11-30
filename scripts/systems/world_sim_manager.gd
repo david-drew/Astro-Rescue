@@ -13,9 +13,9 @@ class_name WorldSimManager
 #
 # Integration:
 #  - Listens to EventBus.time_tick(channel_id, dt_game, dt_real)
-#    -> uses "world_sim" ticks to advance state.
+#	-> uses "world_sim" ticks to advance state.
 #  - Listens to EventBus.mission_completed / mission_failed
-#    -> updates intensity, rank, unlocks, etc.
+#	-> updates intensity, rank, unlocks, etc.
 #  - Syncs _world_state into GameState.world_sim_state.
 #
 # Expected config file (JSON) roughly matches:
@@ -242,6 +242,39 @@ func _sync_world_state_to_gamestate(emit_signal: bool) -> void:
 func get_world_state() -> Dictionary:
 	return _world_state.duplicate(true)
 
+func resolve_mission_id_for_launch() -> String:
+	##
+	# Determines which mission should launch based on current GameState.
+	# Priority:
+	#   1) Explicit mission_id already chosen (e.g., Mission Board → GameState.current_mission_id).
+	#   2) Training flow for new campaigns (uses get_next_training_mission_id()).
+	#   3) Return "" if no mission can be resolved.
+	##
+	var explicit_id: String = GameState.current_mission_id
+	if explicit_id != "":
+		return explicit_id
+
+	var training_done: bool = GameState.training_complete
+	var training_progress: int = int(GameState.training_progress)
+
+	if not training_done or training_progress < 3:
+		var next_training: String = get_next_training_mission_id()
+		if next_training != "":
+			return next_training
+
+	return ""
+
+
+func get_mission_config(mission_id: String) -> Dictionary:
+	##
+	# Thin wrapper over MissionRegistry for mission configs.
+	##
+	if mission_id == "":
+		return {}
+
+	return MissionRegistry.get_mission_config(mission_id)
+
+
 func get_available_training_missions() -> Array:
 	# Returns Array[Dictionary] of tutorial mission configs.
 	# Primary source: MissionRegistry (category == "tutorial").
@@ -385,9 +418,8 @@ func refresh_board_missions_for_hq() -> void:
 	##
 
 	if not GameState.training_complete:
-		print("TRAINING INCOMPLETE (CORRECT)")
 		var tutorials: Array = get_available_training_missions() # returns Array[Dictionary]
-		print("Num Tutorials: ", tutorials.size())
+		#print("Num Tutorials: ", tutorials.size())	# TODO DELETE
 		GameState.available_missions = tutorials
 		if debug_logging:
 			print("[WorldSimManager] HQ refresh: tutorial missions=", tutorials.size())
@@ -895,7 +927,6 @@ func _pick_regular_missions_from_registry(count: int) -> Array:
 		out.append(picked)
 
 	return out
-
 
 
 func _mission_is_expired(mission_cfg: Dictionary) -> bool:

@@ -63,7 +63,7 @@ class_name LanderController
 
 @export_category("Gravity")
 @export var use_altitude_gravity: bool = true  # NEW: Enable altitude-based gravity
-@export var gravity_field_manager_path: NodePath = NodePath("/root/GravityFieldManager")
+@export var gravity_field_manager_path: NodePath = NodePath("/root/Game/Systems/GravityFieldManager")
 
 @export_category("HUD Updates")
 @export var hud_update_enabled: bool = true
@@ -137,7 +137,7 @@ func _ready() -> void:
 			# Try to create one if it doesn't exist
 			var gfm = GravityFieldManager.new()
 			gfm.name = "GravityFieldManager"
-			get_tree().root.add_child(gfm)
+			get_tree().root.add_child.call_deferred(gfm)
 			_gravity_field_manager = gfm
 			print("[LanderController] Created new GravityFieldManager instance")
 

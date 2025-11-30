@@ -42,6 +42,7 @@ var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 # Track generated terrain info
 var _landing_zones_info: Dictionary = {}
+var terrain_config: Dictionary = {}
 var _last_terrain_config: Dictionary = {}
 var _generated_bounds: Rect2 = Rect2()
 var _highest_point_y: float = 0.0
@@ -113,6 +114,7 @@ func get_terrain_body() -> StaticBody2D:
 # -------------------------------------------------------------------
 
 func _generate_internal(terrain_config: Dictionary) -> void:
+	print("\t......TG:generate_internal: 0")
 	if _terrain_root == null:
 		if debug_logging:
 			push_warning("[TerrainGenerator] Cannot generate terrain; TerrainRoot is null.")
@@ -156,6 +158,9 @@ func _generate_internal(terrain_config: Dictionary) -> void:
 			if not info.is_empty():
 				print("\tDEBUG - Adding Landing Zone Collider")
 				_create_landing_zone_collider(info)
+
+	var poi_markers: Array = terrain_config.get("poi_markers", [])
+	_create_poi_marker_colliders(poi_markers)
 
 	# Create landing zone markers (if debug enabled)
 	if debug_show_landing_zones:
@@ -454,6 +459,7 @@ func _apply_landing_zones_improved(points: Array, terrain_config: Dictionary) ->
 		var actual_difficulty: String = _calculate_landing_zone_difficulty(points, indices_in_zone, avg_y)
 
 		_landing_zones_info[zone_id] = {
+			"id": zone_id,
 			"center_x": center_x,
 			"width": width,
 			"surface_y": avg_y,
@@ -758,7 +764,7 @@ func _create_landing_zone_collider(zone_info: Dictionary) -> void:
 	
 	# ADD THESE LINES after creating the area:
 	area.collision_layer = 4   # Layer 3 for landing zones
-	area.collision_mask = 2    # Detect layer 2 (lander)
+	area.collision_mask = 2 | 1    # detect lander (2) and buggy (1)
 	area.monitoring = true
 	area.monitorable = true
 
@@ -780,7 +786,7 @@ func _create_landing_zone_collider(zone_info: Dictionary) -> void:
 	_terrain_root.add_child(area)
 
 func _on_landing_zone_body_entered(body: Node2D, zone_id: String, zone_info: Dictionary) -> void:
-
+	# Lander touchdown classification (existing behavior)
 	if body.is_in_group("lander") or body is LanderController:
 		var impact_data := {}
 		if body.has_method("get_landing_state"):
@@ -794,12 +800,78 @@ func _on_landing_zone_body_entered(body: Node2D, zone_id: String, zone_info: Dic
 				"impact_data": impact_data
 			}
 
-			# Emit with complete data
 			EventBus.emit_signal("touchdown", touchdown_payload)
 			EventBus.emit_signal("lander_entered_landing_zone", zone_id, zone_info)
-			#EventBus.emit_signal("touchdown", zone_id, zone_info)
+		return
 
+	# Surface ops: buggy / EVA entering a landing zone
+	if body.is_in_group("buggy") or body.is_in_group("eva"):
+		# Treat landing zones as POI-style targets for reach_zone objectives
+		EventBus.emit_signal("poi_entered", zone_id, zone_info)
 
 func _on_landing_zone_body_exited(body: Node2D, zone_id: String, zone_info: Dictionary) -> void:
 	if body.is_in_group("lander") or body is LanderController:
 		EventBus.emit_signal("lander_exited_landing_zone", zone_id, zone_info)
+		return
+
+	if body.is_in_group("buggy") or body.is_in_group("eva"):
+		EventBus.emit_signal("poi_exited", zone_id, zone_info)
+
+
+# POI Markers
+func _create_poi_marker_colliders(poi_markers: Array) -> void:
+	if poi_markers.is_empty():
+		return
+
+	for marker in poi_markers:
+		if typeof(marker) != TYPE_DICTIONARY:
+			continue
+
+		var poi_id: String = str(marker.get("id", ""))
+		if poi_id == "":
+			continue
+
+		var x: float = float(marker.get("x", 0.0))
+		var label: String = str(marker.get("label", ""))
+
+		var area := Area2D.new()
+		area.name = "POI_" + poi_id
+		area.set_meta("poi_id", poi_id)
+		area.set_meta("label", label)
+		area.add_to_group("poi_marker")
+
+		# Collision layers:
+		# - Put POIs on layer 8 (bit 4) so they don't collide with terrain/lander.
+		# - Detect buggy + EVA. We'll assume:
+		#   buggy/atv on layer 8? (bit 3) and EVA on layer 16? (bit 4)
+		# If your layers differ, tell me and I'll adjust.
+		area.collision_layer = 8
+		area.collision_mask = 8 | 16
+		area.monitoring = true
+		area.monitorable = true
+
+		# Position slightly above surface.
+		# If you have surface_y at x, use that; otherwise baseline_y.
+		var y: float = float(_last_terrain_config.get("baseline_y", 0.0))
+		#y = float(get_surface_y_at_x(x))
+
+		area.position = Vector2(x, y - 10.0)
+
+		area.body_entered.connect(_on_poi_marker_body_entered.bind(poi_id, marker))
+		area.body_exited.connect(_on_poi_marker_body_exited.bind(poi_id, marker))
+
+		var shape := CollisionShape2D.new()
+		var circle := CircleShape2D.new()
+		circle.radius = float(marker.get("arrival_radius", 120.0))
+		shape.shape = circle
+		area.add_child(shape)
+
+		_terrain_root.add_child(area)
+
+func _on_poi_marker_body_entered(body: Node2D, poi_id: String, poi_info: Dictionary) -> void:
+	if body.is_in_group("buggy") or body.is_in_group("eva"):
+		EventBus.emit_signal("poi_entered", poi_id, poi_info)
+
+func _on_poi_marker_body_exited(body: Node2D, poi_id: String, poi_info: Dictionary) -> void:
+	if body.is_in_group("buggy") or body.is_in_group("eva"):
+		EventBus.emit_signal("poi_exited", poi_id, poi_info)

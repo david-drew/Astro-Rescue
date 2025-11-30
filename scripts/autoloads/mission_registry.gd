@@ -42,9 +42,17 @@ func get_all() -> Array:
 
 
 func get_by_id(id: String) -> Dictionary:
-	if _missions_by_id.has(id):
-		return _missions_by_id[id]
-	return {}
+		if _missions_by_id.has(id):
+				return _missions_by_id[id]
+		return {}
+
+
+func get_mission_config(mission_id: String) -> Dictionary:
+		##
+		# Returns the mission config for the given mission_id or an empty
+		# Dictionary if none is found.
+		##
+		return get_by_id(mission_id)
 
 
 func get_training() -> Array:

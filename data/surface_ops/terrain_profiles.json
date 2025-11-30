@@ -1,0 +1,11 @@
+{
+  "moon_training_surface_v1": {
+	"length": 9000.0,
+	"max_slope_deg": 35.0,
+	"roughness": 0.45,
+	"feature_density": 0.3,
+	"base_height": 600.0,
+	"seed_offset": 0,
+	"wrap_enabled": false
+  }
+}

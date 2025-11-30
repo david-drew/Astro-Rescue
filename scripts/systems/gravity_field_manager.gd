@@ -119,9 +119,9 @@ func set_global_gravity(gravity: Vector2) -> void:
 		print("[GravityFieldManager] Base gravity set to: ", gravity)
 		
 	"""Set the base gravity vector (from environment/planet config)"""
-	print("[GFM] set_global_gravity() called! Old: ", _global_gravity_base, " New: ", gravity)
-	print("    Call stack:")
-	print_stack()  # This will show WHO is calling it
+	#print("[GFM] set_global_gravity() called! Old: ", _global_gravity_base, " New: ", gravity)
+	#print("    Call stack:")
+	#print_stack()  # This will show WHO is calling it
 	_global_gravity_base = gravity
 	if debug_logging:
 		print("[GravityFieldManager] Base gravity set to: ", gravity)
@@ -239,7 +239,6 @@ func _on_terrain_generated(tg: TerrainGenerator) -> void:
 		print("[GravityFieldManager] Updated from terrain generator, surface at: ", surface_y_position)
 
 func _on_environment_gravity_changed(gravity_vector: Vector2) -> void:
-	print("\t\t....................ENV CHANGED GRAVITY: ", gravity_vector)
 	"""Handle gravity updates from EnvironmentController"""
 	set_global_gravity(gravity_vector)
 

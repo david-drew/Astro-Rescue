@@ -93,11 +93,9 @@ func _process(delta: float) -> void:
 			pass  # Transition handled by camera
 			
 	# TODO DEBUG DELETE 
-	if Engine.get_physics_frames() % 60 == 0:
-		var cam := get_viewport().get_camera_2d()
-		print("Current camera is: ", cam)
-
-
+	#if Engine.get_physics_frames() % 60 == 0:
+	#	var cam := get_viewport().get_camera_2d()
+	#	print("Current camera is: ", cam)
 
 func _update_orbit_animation(delta: float) -> void:
 	if rocket_sprite == null:
@@ -143,7 +141,7 @@ func initialize(orbital_config: Dictionary) -> void:
 	
 	# Create visual elements
 	_create_planet()
-	_create_lander_sprite()
+	_create_rocket_sprite()
 	_create_landing_zone_markers()
 	
 	# Setup camera
@@ -303,7 +301,7 @@ func _create_simple_planet_texture(sprite: Sprite2D) -> void:
 	sprite.texture = texture
 	sprite.centered = true
 
-func _create_lander_sprite() -> void:
+func _create_rocket_sprite() -> void:
 	rocket_sprite = Sprite2D.new()
 	rocket_sprite.name = "OrbitingLander"
 	add_child(rocket_sprite)
@@ -480,7 +478,16 @@ func _setup_camera() -> void:
 
 func _complete_transition() -> void:
 	_state = State.COMPLETED
-	_activate_lander_camera()
+
+	var _player = get_node_or_null("/root/Game/World/Player")
+	var _lander = get_node_or_null("/root/Game/World/Player/VehicleLander")
+	if _lander:
+		_lander.reset_for_new_mission()	
+		_activate_mission_camera(_player)
+	else:
+		push_warning("[MissionController] Lander not ready; cannot activate lander camera.")
+
+	reset()
 	transition_completed.emit()
 	
 	if debug_logging:
@@ -530,28 +537,76 @@ func _show_pick_zone_prompt() -> void:
 		add_child(_prompt_timer)
 
 	_prompt_panel.visible = true
-	_prompt_timer.start()
+
+	if _prompt_timer and is_instance_valid(_prompt_timer):
+		_prompt_timer.stop()
+		_prompt_timer.start()  # uses existing wait_time
 
 
 func _hide_pick_zone_prompt() -> void:
 	if _prompt_panel != null:
 		_prompt_panel.visible = false
 
-func _activate_lander_camera() -> void:
+func _activate_mission_camera(_player:Node2D) -> void:
 	# 1. Disable OrbitalView camera if it exists
 	$OrbitalCamera.enabled = false
 
 	# 2. Enable the Lander’s camera
 	#var _woild = get_node_or_null("/root/Game/World")
-	var _lander = get_node_or_null("/root/Game/World/Lander")
-	if _lander:
-		var lander_cam := _lander.get_node_or_null("LanderCam")
-		if lander_cam:
-			lander_cam.enabled = true
-			lander_cam.make_current()
-			#_woild.visible = true
-			#_lander.visible = true
-		else:
-			push_warning("[MissionController] LanderCamera not found under Lander.")
+	var mission_cam := _player.get_node_or_null("MissionCam")
+	if mission_cam:
+		mission_cam.enabled = true
+		mission_cam.make_current()
+		#_woild.visible = true
+		#_lander.visible = true
 	else:
-		push_warning("[MissionController] Lander not ready; cannot activate lander camera.")
+		push_warning("[MissionController] MissionCamera not found under Player.")
+
+func reset() -> void:
+	##
+	# Full runtime reset so OrbitalView can be reused safely.
+	##
+
+	# 1) Clean up existing visual nodes so they don't linger between runs.
+	if rocket_sprite != null and is_instance_valid(rocket_sprite):
+		rocket_sprite.queue_free()
+	rocket_sprite = null
+
+	# (Landing zone markers are already cleaned up inside _create_landing_zone_markers(),
+	# but it's safe to aggressively reset their array here too.)
+	_zone_markers.clear()
+
+	# 2) Reset core config + state.
+	_config = {}  # The orbital_view config from mission JSON
+	_planet_renderer = null
+	_orbital_camera  = null
+
+	_landing_zones    = []  # Array of zone config dictionaries
+	_selected_zone_id = ""
+
+	rocket_orbit_angle  = 0.0
+	rocket_orbit_radius = 450.0
+	rocket_orbit_speed  = 0.8
+
+	_planet_center = Vector2.ZERO
+	_planet_radius = 320.0
+
+	# --- Prompt cleanup ---
+	# Hide any visible prompt.
+	_hide_pick_zone_prompt()
+
+	# ---- prompt reset (the important part) ----
+	# Hide the prompt if it’s visible.
+	_hide_pick_zone_prompt()
+
+	# Stop the timer if it exists.
+	if _prompt_timer != null and is_instance_valid(_prompt_timer):
+		_prompt_timer.stop()
+
+	# Allow the banner to show again next mission.
+	_pick_prompt_shown = false
+
+	# Optional but harmless: make sure we're not processing.
+	# (Normally hide_orbital_view() will do this.)
+	set_process(false)
+	_state = State.HIDDEN

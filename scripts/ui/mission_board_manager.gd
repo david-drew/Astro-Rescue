@@ -30,10 +30,8 @@ extends Control
 # Internal cache of missions shown
 var _displayed_missions: Array = []    # Array[Dictionary]
 
-
 func _ready() -> void:
 	_refresh_from_gamestate()
-
 
 # -------------------------------------------------------------------
 # Public API
@@ -60,7 +58,7 @@ func _refresh_from_gamestate() -> void:
 	_displayed_missions.clear()
 
 	if not GameState:
-		push_warning("MissionBoardManager: GameState missing")
+		push_warning("[MissionBoard] GameState missing")
 		_show_empty_state(true)
 		return
 
@@ -155,19 +153,19 @@ func _on_mission_button_pressed(button: Button) -> void:
 
 	var queue_index_meta = button.get_meta("mission_queue_index")
 	if queue_index_meta == null:
-		push_warning("MissionBoardManager: missing mission index metadata")
+		push_warning("[MissionBoard] missing mission index metadata")
 		return
 
 	var queue_index: int = int(queue_index_meta)
 	var missions: Array = GameState.available_missions
 
 	if queue_index < 0 or queue_index >= missions.size():
-		push_warning("MissionBoardManager: index out of range: " + str(queue_index))
+		push_warning("[MissionBoard] index out of range: " + str(queue_index))
 		return
 
 	var mission_cfg_raw = missions[queue_index]
 	if typeof(mission_cfg_raw) != TYPE_DICTIONARY:
-		push_warning("MissionBoardManager: mission_cfg not a dictionary")
+		push_warning("[MissionBoard] mission_cfg not a dictionary")
 		return
 
 	var mission_cfg: Dictionary = mission_cfg_raw
@@ -180,7 +178,7 @@ func _on_mission_button_pressed(button: Button) -> void:
 	EventBus.emit_signal("start_mission_requested", mission_id, mission_cfg)
 	GameState.current_mission_id = mission_id
 	GameState.current_mission_config = mission_cfg
-
+	self.visible = false
 
 func _on_close_button_pressed() -> void:
 	self.visible = false

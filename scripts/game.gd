@@ -9,6 +9,7 @@ enum GameMode {
 	ORBITAL_VIEW,
 	MISSION_RUNNING,
 	DEBRIEF,
+	GAME_OVER
 }
 
 var _current_mode: GameMode = GameMode.LAUNCH_MENU
@@ -21,21 +22,37 @@ var _current_mode: GameMode = GameMode.LAUNCH_MENU
 @onready var systems: Node            = $Systems
 @onready var mission_controller: Node = $Systems/MissionController
 @onready var world: Node2D            = $World
-@onready var orbital_view: Node2D     = $OrbitalView 
+@onready var orbital_view: Node2D     = $OrbitalView
+@onready var player: Player           = $World/Player
 
 @onready var ui_root: CanvasLayer     = $UI
 @onready var launch_menu: Control     = $UI/LaunchMenu
 @onready var hq_panel: Control        = $UI/HQ
 @onready var lander_hud: Control      = $UI/LanderHUD
-
-# IMPORTANT: rename these NodePaths to your real nodes.
 @onready var briefing_panel: Control  = $UI/BriefingPanel 
 @onready var debrief_panel: Control   = $UI/DebriefPanel 
+@onready var game_over_panel: Control = $UI/GameOverPanel
+@onready var pause_menu_panel: Control = $UI/PauseMenuPanel
+
 
 
 func _ready() -> void:
 	_connect_eventbus()
 	_enter_launch_menu()
+	
+	if pause_menu_panel:
+		if pause_menu_panel.has_signal("load_requested"):
+			pause_menu_panel.load_requested.connect(_on_pause_load_requested)
+		if pause_menu_panel.has_signal("save_requested"):
+			pause_menu_panel.save_requested.connect(_on_pause_save_requested)
+		if pause_menu_panel.has_signal("main_menu_requested"):
+			pause_menu_panel.main_menu_requested.connect(_on_pause_main_menu_requested)
+		if pause_menu_panel.has_signal("quit_requested"):
+			pause_menu_panel.quit_requested.connect(_on_pause_quit_requested)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		_on_ui_cancel_pressed()
 
 
 # -------------------------------------------------------------------
@@ -69,6 +86,8 @@ func _connect_eventbus() -> void:
 	if not eb.is_connected("mission_failed", Callable(self, "_on_mission_failed")):
 		eb.connect("mission_failed", Callable(self, "_on_mission_failed"))
 
+	if not eb.is_connected("game_over_return_requested", Callable(self, "_on_game_over_return_requested")):
+		eb.connect("game_over_return_requested", Callable(self, "_on_game_over_return_requested"))
 
 	# OrbitalView direct signals (from the node itself)
 	# We only connect if the node exists.
@@ -110,7 +129,12 @@ func _apply_mode_visibility() -> void:
 	if lander_hud:
 		lander_hud.visible = false
 	debrief_panel.visible = false
+	game_over_panel.visible = false
 	world.visible = false
+
+	if _current_mode == GameMode.GAME_OVER:
+		if game_over_panel:
+			game_over_panel.visible = true
 
 	if _current_mode == GameMode.LAUNCH_MENU:
 		if launch_menu:
@@ -132,10 +156,16 @@ func _apply_mode_visibility() -> void:
 		lander_hud.visible = true
 		world.visible = true
 
+	if lander_hud:
+		lander_hud.visible = world.visible
+
+	if _current_mode != GameMode.MISSION_RUNNING:
+		if player:
+			player.enter_hq()
+
 	if _current_mode == GameMode.DEBRIEF:
 		if debrief_panel:
 			debrief_panel.visible = true
-
 
 func _apply_mode_processing() -> void:
 	# Disable world ticking unless a mission is running.
@@ -178,7 +208,17 @@ func _on_new_game_requested() -> void:
 	if debug_logging:
 		print("[Game] new_game_requested")
 
+	# Make sure any existing mission runtime state is cleared first.
+	_reset_mission_runtime_state()
+
 	GameState.reset_profile()
+
+	if MissionRegistry:
+		MissionRegistry.reload_all()
+
+	var wsm = WorldSimManager.new()
+	wsm.refresh_board_missions_for_hq()
+
 	_enter_hq()
 
 
@@ -208,7 +248,10 @@ func _on_debrief_return_requested() -> void:
 	if debug_logging:
 		print("[Game] debrief_return_requested")
 
+	_finalize_mission_and_reset()
+	_reset_mission_runtime_state()
 	_enter_hq()
+
 
 
 # -------------------------------------------------------------------
@@ -257,6 +300,7 @@ func _on_mission_started(mission_id:String="") -> void:
 	if debug_logging:
 		print("[Game] mission_started: ", mission_id)
 
+	_enter_mission_running()
 
 func _on_mission_completed(mission_id: String, result: Dictionary) -> void:
 	if debug_logging:
@@ -267,8 +311,102 @@ func _on_mission_completed(mission_id: String, result: Dictionary) -> void:
 
 
 func _on_mission_failed(mission_id: String, reason: String, result: Dictionary) -> void:
-	if debug_logging:
-		print("[Game] mission_failed: ", mission_id, " reason=", reason)
+	var is_death_fail: bool = false
 
-	# Flow: Mission -> Debrief (fail variant)
-	_enter_debrief()
+	if reason == "player_died" or reason == "lander_destroyed":
+		is_death_fail = true
+
+	if is_death_fail:
+		_enter_game_over(reason, result)
+	else:
+		_enter_debrief()
+
+func _enter_game_over(reason: String, result: Dictionary) -> void:
+	_set_mode(GameMode.GAME_OVER)
+
+	if game_over_panel and game_over_panel.has_method("show_game_over"):
+		game_over_panel.call("show_game_over", reason, result)
+
+func _on_game_over_return_requested() -> void:
+	if debug_logging:
+		print("[Game] game_over_return_requested")
+
+	_finalize_mission_and_reset()
+	_reset_mission_runtime_state()
+	_enter_launch_menu()
+
+func _on_ui_cancel_pressed() -> void:
+	# Do not show pause menu in Launch Menu.
+	if _current_mode == GameMode.LAUNCH_MENU:
+		return
+
+	if pause_menu_panel:
+		if pause_menu_panel.has_method("toggle_menu"):
+			pause_menu_panel.call("toggle_menu")
+		else:
+			pause_menu_panel.visible = not pause_menu_panel.visible
+
+func _on_pause_load_requested() -> void:
+	if debug_logging:
+		print("[Game] Pause: Load requested (not implemented yet)")
+	# TODO: hook into SaveSystem when ready.
+
+func _on_pause_save_requested() -> void:
+	if debug_logging:
+		print("[Game] Pause: Save requested (not implemented yet)")
+	# TODO: hook into SaveSystem when ready.
+
+func _on_pause_main_menu_requested() -> void:
+	if debug_logging:
+		print("[Game] Pause: Main Menu requested")
+	# For now, just go back to the launch menu.
+	# You *may* want to call _reset_mission_runtime_state() too if leaving mid-mission.
+	_enter_launch_menu()
+
+func _on_pause_quit_requested() -> void:
+	if debug_logging:
+		print("[Game] Pause: Quit requested")
+	get_tree().quit()
+
+
+func _reset_mission_runtime_state() -> void:
+	##
+	# Central place to reset per-mission runtime state so we can safely
+	# start another mission in this session.
+	##
+
+	# 1) MissionController
+	if mission_controller and mission_controller.has_method("reset"):
+		mission_controller.reset()
+
+	# 2) OrbitalView
+	if orbital_view and orbital_view.has_method("reset"):
+		orbital_view.reset()
+
+	# 3) GameState mission variables
+	if GameState and GameState.has_method("clear_current_mission"):
+		GameState.clear_current_mission()
+
+	# 4) Player vehicles (lander for now)
+	var lander: Node = null
+	if GameState and "lander" in GameState.vehicles:
+		lander = GameState.vehicles.lander
+	if lander == null:
+		lander = get_node_or_null("/root/Game/World/Player/VehicleLander")
+
+	if lander and lander.has_method("reset_for_new_mission"):
+		lander.reset_for_new_mission()
+
+func _finalize_mission_and_reset() -> void:
+	##
+	# Apply mission rewards/penalties to the career profile,
+	# then reset mission runtime state so we can safely start another mission.
+	##
+	if GameState:
+		var result: Dictionary = GameState.current_mission_result
+		if not result.is_empty():
+			GameState.apply_mission_result(result)
+
+	# Now that rewards are applied, clear runtime mission state.
+	if has_method("_reset_mission_runtime_state"):
+		_reset_mission_runtime_state()

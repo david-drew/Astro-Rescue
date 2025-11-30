@@ -59,6 +59,10 @@ signal career_status_changed(new_status: String, reason: String)
 ## career terminated (e.g., rep too low or player death).
 signal career_terminated(reason: String)
 
+# Vehicle Signals
+signal poi_area_entered(poi_id: String)
+signal landing_zone_area_entered(zone_id: String)
+signal rescue_interaction_complete(target_id: String)
 
 # -------------------------------------------------------------------
 # Unlocks & Progression
@@ -68,6 +72,10 @@ signal crew_unlocked(crew_id: String)		# new crew member unlocked.
 signal mission_tag_unlocked(tag: String)	# new mission tag is unlocked (gates archetypes/arcs).
 
 signal terrain_generated(terrain_generator:Node)
+signal poi_entered(poi_id: String, poi_info: Dictionary)
+signal poi_exited(poi_id: String, poi_info: Dictionary)
+signal eva_interacted(target_id: String)
+signal set_vehicle_mode(vehicle: String)
 
 # -------------------------------------------------------------------
 # Mission lifecycle (config, runtime, results)
@@ -111,7 +119,8 @@ signal lander_exited_landing_zone(zone_id: String, zone_info: Dictionary)
 signal orbit_reached()
 
 ## Emitted on touchdown attempt; success indicates a safe landing according to current thresholds.
-signal touchdown(success: bool, impact_data: Dictionary)
+#signal touchdown(success: bool, impact_data: Dictionary)
+signal touchdown(touchdown_data: Dictionary)
 
 ## Emitted when the lander is destroyed (hard crash, tip-over beyond recovery, etc.).
 signal lander_destroyed(cause: String, context: Dictionary)
@@ -154,6 +163,9 @@ signal profile_save_failed(error_message: String)
 
 signal lander_altitude_changed(altitude_meters: float)
 signal lander_stats_updated(stats: Dictionary)
+## Emitted when the player dismisses the Game Over screen and wants to return to the Launch Menu.
+signal game_over_return_requested()
+signal update_player_stats(rep:int, creds:int)
 
 # -------------------------------------------------------------------
 # Optional debug helper

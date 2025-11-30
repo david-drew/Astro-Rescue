@@ -1,9 +1,8 @@
-[gd_scene load_steps=16 format=3 uid="uid://ct8c084jmt55y"]
+[gd_scene load_steps=15 format=3 uid="uid://ct8c084jmt55y"]
 
 [ext_resource type="Script" uid="uid://cvw2w84pct25t" path="res://scripts/lander_controller.gd" id="1_3ri1r"]
 [ext_resource type="Texture2D" uid="uid://dbhrs54xr3i0r" path="res://assets/images/Spaceships.png" id="2_fo1sg"]
 [ext_resource type="Texture2D" uid="uid://7db7i845ki7o" path="res://assets/images/fx/Thruster_01.png" id="3_p73th"]
-[ext_resource type="Script" uid="uid://6usp3u5g1fyx" path="res://scripts/ui/camera_2d.gd" id="4_fo1sg"]
 [ext_resource type="Texture2D" uid="uid://d1hcdrti6ual7" path="res://assets/images/fx/Explosion.png" id="5_p73th"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_0tnpc"]
@@ -78,7 +77,10 @@ animations = [{
 "speed": 5.0
 }]
 
-[node name="Lander" type="RigidBody2D"]
+[node name="VehicleLander" type="RigidBody2D"]
+contact_monitor = true
+max_contacts_reported = 4
+linear_damp = 0.1
 script = ExtResource("1_3ri1r")
 base_thrust_force = 4.0
 base_fuel_burn_rate = 4.0
@@ -97,9 +99,6 @@ hframes = 4
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0.5, -0.5)
 shape = SubResource("RectangleShape2D_0tnpc")
-
-[node name="LanderCam" type="Camera2D" parent="."]
-script = ExtResource("4_fo1sg")
 
 [node name="DeathSprite" type="AnimatedSprite2D" parent="."]
 visible = false
