@@ -10,7 +10,7 @@ var terrain_tiles_controller: Node = null
 var lander: Node2D = null
 var hud: Node = null
 var orbital_view: Node = null
-var player: Node = null
+var player: Node2D = null
 var world_node: Node = null
 
 # NodePaths injected from MC
@@ -530,15 +530,15 @@ func show_landing_gameplay(mission_config: Dictionary, chosen_zone_id: String, d
 
 
 func enable_gameplay_camera(debug: bool) -> void:
-	# Enable the gameplay camera (usually attached to lander or separate)
+	# Enable the gameplay camera (attached to player)
 
 	# Camera on lander
-	if lander != null and lander.has_node("Camera2D"):
-		var cam := lander.get_node("Camera2D") as Camera2D
+	if player != null and lander.has_node("MissionCam"):
+		var cam := lander.get_node("MissionCam") as Camera2D
 		if cam != null:
 			cam.enabled = true
 			if debug:
-				print("[MC-Setup] Lander camera enabled")
+				print("[MC-Setup] Player camera enabled")
 
 
 func set_player_vehicle_mode(mode: String, phase: Dictionary = {}) -> void:

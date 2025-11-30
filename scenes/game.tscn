@@ -1,4 +1,4 @@
-[gd_scene load_steps=36 format=3 uid="uid://dhwbgfm0d7vpi"]
+[gd_scene load_steps=37 format=3 uid="uid://dhwbgfm0d7vpi"]
 
 [ext_resource type="Script" uid="uid://cqj2hsg7f8ycf" path="res://scripts/game.gd" id="1_yqjtg"]
 [ext_resource type="Script" uid="uid://c5k1dh5ok7a3d" path="res://scripts/missions/mission_controller.gd" id="2_iywne"]
@@ -18,6 +18,7 @@
 [ext_resource type="Script" uid="uid://dr8he4hddc0tr" path="res://scripts/actors/player.gd" id="13_1kice"]
 [ext_resource type="Script" uid="uid://dac1odxjscqoj" path="res://scripts/ui/orbital_camera.gd" id="13_ca42v"]
 [ext_resource type="Script" uid="uid://qe4hfmcivu5o" path="res://scripts/ui/orbital_view.gd" id="13_rysoc"]
+[ext_resource type="Script" uid="uid://6usp3u5g1fyx" path="res://scripts/ui/mission_cam.gd" id="13_suyxu"]
 [ext_resource type="Script" uid="uid://dwv7thkegjgmv" path="res://scripts/actors/vehicle_eva.gd" id="14_5newe"]
 [ext_resource type="Script" uid="uid://llbywr7c72h6" path="res://scripts/actors/vehicle_buggy.gd" id="14_37s47"]
 [ext_resource type="Script" uid="uid://d34qoorinjw64" path="res://scripts/actors/vehicle_lander.gd" id="14_bt5mj"]
@@ -148,6 +149,9 @@ z_index = 2
 z_index = 200
 script = ExtResource("13_1kice")
 surface_ops_dialog_path = NodePath("../../UI/SurfaceOpsDialogue")
+
+[node name="MissionCam" type="Camera2D" parent="World/Player"]
+script = ExtResource("13_suyxu")
 
 [node name="VehicleLander" parent="World/Player" instance=ExtResource("9_kvuet")]
 z_index = 200
@@ -493,6 +497,7 @@ theme_override_font_sizes/font_size = 32
 text = "Quit"
 
 [node name="SurfaceOpsDialogue" type="Control" parent="UI"]
+visible = false
 custom_minimum_size = Vector2(400, 250)
 layout_mode = 3
 anchors_preset = 8

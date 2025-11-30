@@ -15,9 +15,12 @@ enum PlayerMode {
 @export var lander_path: NodePath = NodePath("VehicleLander")
 @export var buggy_path: NodePath = NodePath("VehicleBuggy")
 @export var eva_path: NodePath = NodePath("VehicleEVA")
+@export var mission_cam_path: NodePath = NodePath("MissionCam")
 @export var boarding_zone_path: NodePath
 @export var surface_ops_dialog_path: NodePath
 
+
+var _mission_cam: Node = null
 var _surface_ops_dialog: Node = null
 var _boarding_zone: LanderBoardingZone = null
 var _can_board_from_surface: bool = false
@@ -37,6 +40,7 @@ func _ready() -> void:
 	_lander = get_node_or_null(lander_path) as VehicleLander
 	_buggy = get_node_or_null(buggy_path) as VehicleBuggy
 	_eva = get_node_or_null(eva_path) as VehicleEVA
+	_mission_cam = get_node_or_null(mission_cam_path)
 
 	if surface_ops_dialog_path != NodePath(""):
 		_surface_ops_dialog = get_node_or_null(surface_ops_dialog_path)
@@ -175,6 +179,8 @@ func _set_mode(new_mode: PlayerMode, force: bool = false) -> void:
 	_set_controller_active(_lander, new_mode == PlayerMode.LANDER)
 	_set_controller_active(_buggy, new_mode == PlayerMode.BUGGY or new_mode == PlayerMode.ATV)
 	_set_controller_active(_eva, new_mode == PlayerMode.EVA)
+	
+	_update_mission_cam_target()
 
 	emit_signal("mode_changed", old_name, new_name)
 
@@ -232,6 +238,39 @@ func _on_set_vehicle_mode(vehicle: String) -> void:
 
 	# Fallback: treat anything else as HQ/none to keep vehicles disabled
 	enter_hq()
+
+func _update_mission_cam_target() -> void:
+	if _mission_cam == null:
+		return
+
+	if _mode == PlayerMode.LANDER:
+		if _lander != null and _mission_cam.has_method("set_target"):
+			_mission_cam.set_target(_lander, "lander")
+		else:
+			if _mission_cam.has_method("clear_target"):
+				_mission_cam.clear_target()
+		return
+
+	if _mode == PlayerMode.BUGGY or _mode == PlayerMode.ATV:
+		if _buggy != null and _mission_cam.has_method("set_target"):
+			_mission_cam.set_target(_buggy, "buggy")
+		else:
+			if _mission_cam.has_method("clear_target"):
+				_mission_cam.clear_target()
+		return
+
+	if _mode == PlayerMode.EVA:
+		if _eva != null and _mission_cam.has_method("set_target"):
+			_mission_cam.set_target(_eva, "eva")
+		else:
+			if _mission_cam.has_method("clear_target"):
+				_mission_cam.clear_target()
+		return
+
+	# Any other mode (HQ, unknown) → no mission camera target.
+	if _mission_cam.has_method("clear_target"):
+		_mission_cam.clear_target()
+
 
 func _handle_vehicle_interact() -> void:
 	# Single button for enter/exit behavior.

@@ -479,10 +479,11 @@ func _setup_camera() -> void:
 func _complete_transition() -> void:
 	_state = State.COMPLETED
 
+	var _player = get_node_or_null("/root/Game/World/Player")
 	var _lander = get_node_or_null("/root/Game/World/Player/VehicleLander")
 	if _lander:
 		_lander.reset_for_new_mission()	
-		_activate_lander_camera(_lander)
+		_activate_mission_camera(_player)
 	else:
 		push_warning("[MissionController] Lander not ready; cannot activate lander camera.")
 
@@ -546,20 +547,20 @@ func _hide_pick_zone_prompt() -> void:
 	if _prompt_panel != null:
 		_prompt_panel.visible = false
 
-func _activate_lander_camera(_lander:RigidBody2D) -> void:
+func _activate_mission_camera(_player:Node2D) -> void:
 	# 1. Disable OrbitalView camera if it exists
 	$OrbitalCamera.enabled = false
 
 	# 2. Enable the Lander’s camera
 	#var _woild = get_node_or_null("/root/Game/World")
-	var lander_cam := _lander.get_node_or_null("LanderCam")
-	if lander_cam:
-		lander_cam.enabled = true
-		lander_cam.make_current()
+	var mission_cam := _player.get_node_or_null("MissionCam")
+	if mission_cam:
+		mission_cam.enabled = true
+		mission_cam.make_current()
 		#_woild.visible = true
 		#_lander.visible = true
 	else:
-		push_warning("[MissionController] LanderCamera not found under Lander.")
+		push_warning("[MissionController] MissionCamera not found under Player.")
 
 func reset() -> void:
 	##
